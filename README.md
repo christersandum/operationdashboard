@@ -17,14 +17,42 @@ A real-time military/operations web dashboard inspired by ArcGIS Mission Manager
 - **Live Clock** — UTC clock in the header bar
 - **Broadcast** — Send a message to all units via the Broadcast button
 
-## Usage
+## Getting Started
 
-Open `index.html` directly in any modern browser — no build step or server required.
+There is **no build step** — the dashboard is pure HTML, CSS and JavaScript with Leaflet.js bundled locally.
 
-```
+### Option 1 — Open directly in a browser (simplest)
+
+```bash
+# macOS
 open index.html
-# or serve locally:
-npx serve .
+
+# Windows
+start index.html
+
+# Linux
+xdg-open index.html
+```
+
+### Option 2 — Serve with npm (recommended, avoids browser file-access restrictions)
+
+```bash
+npm start
+```
+
+Then open the URL shown in the terminal (e.g. `http://localhost:3000`) in any modern browser.
+
+> **Prerequisites:** [Node.js](https://nodejs.org/) must be installed.  
+> The first run will automatically download the lightweight `serve` package via `npx`.
+
+### Option 3 — Any other static file server
+
+```bash
+# Python 3
+python3 -m http.server 8080
+
+# Node http-server
+npx http-server .
 ```
 
 ## File Structure
@@ -33,9 +61,10 @@ npx serve .
 index.html   – Main dashboard layout
 styles.css   – Dark-theme stylesheet
 app.js       – Map, data, and interactivity logic
+lib/         – Bundled third-party libraries (Leaflet.js)
 ```
 
-## Dependencies (CDN)
+## Dependencies
 
-- [Leaflet.js 1.9.4](https://leafletjs.com/) — map rendering
-- [CartoDB Dark Matter tiles](https://carto.com/basemaps/) — dark map tiles
+- [Leaflet.js 1.9.4](https://leafletjs.com/) — map rendering (bundled in `lib/leaflet/`)
+- [CartoDB Dark Matter tiles](https://carto.com/basemaps/) — dark map tiles (loaded from CDN at runtime)

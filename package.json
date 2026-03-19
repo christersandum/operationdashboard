@@ -1,0 +1,10 @@
+{
+  "name": "operationdashboard",
+  "version": "1.0.0",
+  "description": "A real-time military/operations web dashboard inspired by ArcGIS Mission Manager.",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": ["dashboard", "leaflet", "map", "operations"],
+  "license": "MIT"
+}
