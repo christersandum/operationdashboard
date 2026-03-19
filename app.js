@@ -89,8 +89,10 @@ function initClock() {
       `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} UTC`;
     document.getElementById('clockDate').textContent =
       now.toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+    const startHour = missionStartTime ? new Date(missionStartTime).getHours() : 0;
+    const startMin  = missionStartTime ? new Date(missionStartTime).getMinutes() : 0;
     document.getElementById('missionStart').textContent =
-      `${pad(now.getHours()-2<0?now.getHours()-2+24:now.getHours()-2)}:${pad(now.getMinutes())} UTC`;
+      missionStartTime ? `${pad(startHour)}:${pad(startMin)} UTC` : '--';
   }
   tick();
   setInterval(tick, 1000);
@@ -234,9 +236,15 @@ function renderParticipants(query = '', filter = 'all') {
     return matchQ && matchF;
   });
 
-  // Group by status
+  // Group by status — units with an unrecognised status fall into 'online'
   const groups = { online: [], warning: [], offline: [] };
-  filtered.forEach(u => groups[u.status]?.push(u) || groups.online.push(u));
+  filtered.forEach(u => {
+    if (groups[u.status]) {
+      groups[u.status].push(u);
+    } else {
+      groups.online.push(u);
+    }
+  });
 
   const groupLabels = { online: 'Online', warning: 'Warning / Low Signal', offline: 'Offline' };
   let total = 0;
