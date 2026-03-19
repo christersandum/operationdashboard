@@ -55,6 +55,30 @@ python3 -m http.server 8080
 npx http-server .
 ```
 
+## Hosting on GitHub Pages
+
+Because this project is a static site with `index.html` at the repository root, it works with GitHub Pages out of the box — no build step or configuration file needed.
+
+### Steps
+
+1. **Push your code to GitHub** (or fork/clone this repository to your own GitHub account).
+
+2. **Open the repository on GitHub** and go to **Settings** → **Pages** (left-hand sidebar).
+
+3. Under **"Build and deployment"**, set the **Source** to **"Deploy from a branch"**.
+
+4. Under **Branch**, choose **`main`** (or whichever branch holds your code) and leave the folder as **`/ (root)`**. Click **Save**.
+
+5. After a few seconds, GitHub Pages will publish the site. A banner at the top of the Settings → Pages page will show the live URL:
+
+   ```
+   https://<your-github-username>.github.io/<repository-name>/
+   ```
+
+6. Open that URL in any browser — the Operation Dashboard will load directly.
+
+> **Note:** GitHub Pages is free for public repositories. For private repositories it requires a paid GitHub plan.
+
 ## File Structure
 
 ```
