@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="no">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Operation Dashboard</title>
+  <title>Operasjonsdashboard</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="lib/leaflet/leaflet.css" />
@@ -13,7 +13,7 @@
 </head>
 <body>
 
-  <!-- ===== TOP HEADER ===== -->
+  <!-- ===== TOPPTEKST ===== -->
   <header class="top-header">
     <!-- Logo -->
     <div class="header-logo">
@@ -22,101 +22,112 @@
         <polygon points="11,4 17.5,7.75 17.5,15.25 11,19 4.5,15.25 4.5,7.75" fill="none" stroke="#fff" stroke-width="1.2"/>
         <circle cx="11" cy="11" r="3" fill="#fff"/>
       </svg>
-      OPERATION DASHBOARD
+      OPERASJONS DASHBOARD
     </div>
 
-    <!-- Mission Name -->
+    <!-- Operasjonsveksler -->
+    <div class="operation-select-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg>
+      <select id="operationSelect" class="operation-select">
+        <option value="nordic-shield">Operation Nordic Shield</option>
+        <option value="norwegian-sword">Operasjon Norwegian Sword</option>
+      </select>
+    </div>
+
+    <!-- Oppdragsnavn -->
     <div class="header-mission-name">
       <span id="missionName">OPERATION NORDIC SHIELD</span>
     </div>
 
-    <!-- Live Status -->
+    <!-- Aktiv-status -->
     <div class="header-status-badge">
       <div class="status-dot"></div>
-      <span>LIVE</span>
+      <span>AKTIV</span>
     </div>
 
     <div class="header-spacer"></div>
 
-    <!-- Clock -->
+    <!-- Klokke -->
     <div class="header-btn" style="min-width:110px; justify-content:center; font-family:monospace; font-size:13px; color:var(--text-primary);">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span id="clock">--:--:--</span>
       <span id="clockDate" style="color:var(--text-muted); font-size:10px;"></span>
     </div>
 
-    <button class="header-btn" title="Notifications">
+    <button class="header-btn" title="Varsler">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="notif-count">3</span>
     </button>
 
     <button class="header-btn primary" id="broadcastBtn">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
-      Broadcast
+      Kringkast
     </button>
 
-    <button class="header-btn" title="Settings">
+    <button class="header-btn" title="Innstillinger">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
 
-    <div class="header-avatar" title="Admin User">AU</div>
+    <div class="header-avatar" title="Admin Bruker">AU</div>
   </header>
 
-  <!-- ===== MAIN LAYOUT ===== -->
+  <!-- ===== HOVEDOPPSETT ===== -->
   <div class="main-layout">
 
-    <!-- ===== SIDEBAR ===== -->
+    <!-- ===== SIDEPANEL ===== -->
     <aside class="sidebar">
-      <!-- Tab Navigation -->
+      <!-- Fanenavigasjon -->
       <nav class="tab-bar">
-        <button class="tab-btn active" data-tab="overview" title="Mission Overview">
+        <button class="tab-btn active" data-tab="overview" title="Oppdragsoversikt">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          Overview
+          Oversikt
         </button>
-        <button class="tab-btn" data-tab="participants" title="Participants">
+        <button class="tab-btn" data-tab="participants" title="Enheter">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Units
+          Enheter
           <span class="tab-badge" id="unitBadge" style="display:none"></span>
         </button>
-        <button class="tab-btn" data-tab="incidents" title="Incidents">
+        <button class="tab-btn" data-tab="incidents" title="Hendelser">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Incidents
+          Hendelser
           <span class="tab-badge" id="incidentBadge">4</span>
         </button>
-        <button class="tab-btn" data-tab="chat" title="Mission Chat">
+        <button class="tab-btn" data-tab="chat" title="Oppdragschat">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           Chat
           <span class="tab-badge" id="chatBadge">2</span>
         </button>
       </nav>
 
-      <!-- ===== OVERVIEW TAB ===== -->
+      <!-- ===== OVERSIKTSFANE ===== -->
       <div class="tab-content active" id="tab-overview">
         <div class="scrollable">
-          <!-- Stats -->
+          <!-- Statistikk -->
           <div class="overview-section">
-            <div class="overview-title">Mission Status</div>
+            <div class="overview-title">Oppdragsstatus</div>
             <div class="stat-grid">
               <div class="stat-card">
                 <div class="stat-value green" id="stat-units">14</div>
-                <div class="stat-label">Active Units</div>
+                <div class="stat-label">Aktive Enheter</div>
               </div>
               <div class="stat-card">
                 <div class="stat-value red" id="stat-incidents">4</div>
-                <div class="stat-label">Incidents</div>
+                <div class="stat-label">Hendelser</div>
               </div>
               <div class="stat-card">
                 <div class="stat-value blue" id="stat-tasks">9</div>
-                <div class="stat-label">Tasks Open</div>
+                <div class="stat-label">Åpne Oppgaver</div>
               </div>
               <div class="stat-card">
                 <div class="stat-value orange" id="stat-alerts">3</div>
-                <div class="stat-label">Alerts</div>
+                <div class="stat-label">Varsler</div>
               </div>
             </div>
             <div class="progress-bar-wrap" style="margin-top:12px;">
               <div class="progress-label">
-                <span>Mission Progress</span>
+                <span>Oppdragsframgang</span>
                 <span id="missionProgressPct">62%</span>
               </div>
               <div class="progress-bar">
@@ -125,80 +136,60 @@
             </div>
           </div>
 
-          <!-- Mission Info -->
+          <!-- Oppdragsinfo -->
           <div class="overview-section">
-            <div class="overview-title">Mission Info</div>
+            <div class="overview-title">Oppdragsinfo</div>
             <div class="mission-info-row">
-              <span class="info-label">Commander</span>
-              <span class="info-value">Col. A. Bergström</span>
+              <span class="info-label">Kommandant</span>
+              <span class="info-value" id="commanderName">Oberst A. Bergström</span>
             </div>
             <div class="mission-info-row">
               <span class="info-label">Status</span>
-              <span class="info-value active">ACTIVE</span>
+              <span class="info-value active">AKTIV</span>
             </div>
             <div class="mission-info-row">
-              <span class="info-label">Start Time</span>
+              <span class="info-label">Starttid</span>
               <span class="info-value" id="missionStart">--</span>
             </div>
             <div class="mission-info-row">
-              <span class="info-label">Duration</span>
+              <span class="info-label">Varighet</span>
               <span class="info-value" id="missionDuration">--</span>
             </div>
             <div class="mission-info-row">
-              <span class="info-label">AO Center</span>
-              <span class="info-value">59.33°N 18.07°E</span>
+              <span class="info-label">AO Senter</span>
+              <span class="info-value" id="missionAoCenter">59.33°N 18.07°E</span>
             </div>
             <div class="mission-info-row">
-              <span class="info-label">Comms</span>
-              <span class="info-value active">Encrypted</span>
+              <span class="info-label">Samband</span>
+              <span class="info-value active">Kryptert</span>
             </div>
           </div>
 
-          <!-- Recent Alerts -->
+          <!-- Siste varsler -->
           <div class="overview-section" style="padding:0;">
             <div class="section-header">
-              <span class="section-title">Recent Alerts</span>
-              <span class="section-count">3 new</span>
+              <span class="section-title">Siste Varsler</span>
+              <span class="section-count">3 nye</span>
             </div>
             <div id="alertList">
-              <div class="alert-item">
-                <div class="alert-icon" style="background:rgba(231,76,60,0.15); color:var(--accent-red);">⚠</div>
-                <div class="alert-body">
-                  <div class="alert-text">Unit Alpha-3 out of contact zone</div>
-                  <div class="alert-time">2 min ago</div>
-                </div>
-              </div>
-              <div class="alert-item">
-                <div class="alert-icon" style="background:rgba(243,156,18,0.15); color:var(--accent-orange);">📡</div>
-                <div class="alert-body">
-                  <div class="alert-text">Low signal strength: Bravo-7</div>
-                  <div class="alert-time">8 min ago</div>
-                </div>
-              </div>
-              <div class="alert-item">
-                <div class="alert-icon" style="background:rgba(241,196,15,0.15); color:var(--accent-yellow);">🔋</div>
-                <div class="alert-body">
-                  <div class="alert-text">Battery warning: Delta-2 (18%)</div>
-                  <div class="alert-time">15 min ago</div>
-                </div>
-              </div>
+              <!-- Populeres av JS -->
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ===== PARTICIPANTS TAB ===== -->
+      <!-- ===== ENHETSFANE ===== -->
       <div class="tab-content" id="tab-participants">
         <div class="section-header">
           <span class="section-title">
-            Field Units
-            <span class="section-count" id="participantCount">14 active</span>
+            Feltenheter
+            <span class="section-count" id="participantCount">14 enheter</span>
           </span>
           <div class="section-actions">
-            <button class="icon-btn" title="Add Unit">
+            <button class="icon-btn" title="Legg til enhet">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
-            <button class="icon-btn" title="Export">
+            <button class="icon-btn" title="Eksporter">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
           </div>
@@ -206,29 +197,29 @@
         <div class="search-container">
           <div class="search-input-wrap">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="participantSearch" placeholder="Search units..." />
+            <input type="text" id="participantSearch" placeholder="Søk enheter…" />
           </div>
         </div>
         <div class="filter-pills">
-          <span class="filter-pill active" data-filter="all">All</span>
+          <span class="filter-pill active" data-filter="all">Alle</span>
           <span class="filter-pill" data-filter="online">Online</span>
-          <span class="filter-pill" data-filter="moving">Moving</span>
+          <span class="filter-pill" data-filter="moving">I bevegelse</span>
           <span class="filter-pill" data-filter="offline">Offline</span>
         </div>
         <div class="scrollable" id="participantList">
-          <!-- Populated by JS -->
+          <!-- Populeres av JS -->
         </div>
       </div>
 
-      <!-- ===== INCIDENTS TAB ===== -->
+      <!-- ===== HENDELSESFANE ===== -->
       <div class="tab-content" id="tab-incidents">
         <div class="section-header">
           <span class="section-title">
-            Incidents
-            <span class="section-count" id="incidentCount">4 open</span>
+            Hendelser
+            <span class="section-count" id="incidentCount">4 åpne</span>
           </span>
           <div class="section-actions">
-            <button class="icon-btn" id="addIncidentBtn" title="Report Incident">
+            <button class="icon-btn" id="addIncidentBtn" title="Rapporter hendelse">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>
@@ -236,36 +227,36 @@
         <div class="search-container">
           <div class="search-input-wrap">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="incidentSearch" placeholder="Search incidents..." />
+            <input type="text" id="incidentSearch" placeholder="Søk hendelser…" />
           </div>
         </div>
         <div class="filter-pills">
-          <span class="filter-pill active" data-filter="all">All</span>
-          <span class="filter-pill" data-filter="high">High</span>
+          <span class="filter-pill active" data-filter="all">Alle</span>
+          <span class="filter-pill" data-filter="high">Høy</span>
           <span class="filter-pill" data-filter="medium">Medium</span>
-          <span class="filter-pill" data-filter="low">Low</span>
+          <span class="filter-pill" data-filter="low">Lav</span>
         </div>
         <div class="scrollable" id="incidentList">
-          <!-- Populated by JS -->
+          <!-- Populeres av JS -->
         </div>
       </div>
 
-      <!-- ===== CHAT TAB ===== -->
+      <!-- ===== CHATFANE ===== -->
       <div class="tab-content" id="tab-chat">
         <div class="section-header">
-          <span class="section-title">Mission Chat</span>
+          <span class="section-title">Oppdragschat</span>
           <div class="section-actions">
-            <button class="icon-btn" title="Clear">
+            <button class="icon-btn" title="Tøm chat">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
         </div>
         <div class="chat-messages" id="chatMessages">
-          <!-- Populated by JS -->
+          <!-- Populeres av JS -->
         </div>
         <div class="chat-input-area">
           <div class="chat-input-row">
-            <textarea class="chat-textarea" id="chatInput" placeholder="Type a message… (Enter to send)" rows="1"></textarea>
+            <textarea class="chat-textarea" id="chatInput" placeholder="Skriv en melding… (Enter for å sende)" rows="1"></textarea>
             <button class="chat-send-btn" id="chatSendBtn" title="Send">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
@@ -274,55 +265,55 @@
       </div>
     </aside>
 
-    <!-- ===== MAP AREA ===== -->
+    <!-- ===== KARTOMRÅDE ===== -->
     <div style="position:relative; flex:1;">
       <div id="map"></div>
 
-      <!-- Map Toolbar -->
+      <!-- Kartverktøylinje -->
       <div class="map-toolbar">
         <button class="map-toolbar-btn active" id="btnUnits">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-          Units
+          Enheter
         </button>
         <button class="map-toolbar-btn active" id="btnIncidents">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-          Incidents
+          Hendelser
         </button>
         <button class="map-toolbar-btn" id="btnLayers">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-          Layers
+          Kartlag
         </button>
         <button class="map-toolbar-btn" id="btnMeasure">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2v20M5 5l14 14"/></svg>
-          Measure
+          Mål
         </button>
       </div>
 
-      <!-- Layer Panel -->
+      <!-- Kartlag-panel -->
       <div class="layer-panel" id="layerPanel">
-        <div class="layer-panel-title">Map Layers</div>
-        <label class="layer-item"><input type="checkbox" checked id="layerStreets"> Streets</label>
-        <label class="layer-item"><input type="checkbox" checked id="layerSatellite"> Satellite Overlay</label>
-        <label class="layer-item"><input type="checkbox" checked id="layerUnits"> Unit Positions</label>
-        <label class="layer-item"><input type="checkbox" checked id="layerIncidents"> Incident Markers</label>
-        <label class="layer-item"><input type="checkbox" id="layerGrid"> Grid Reference</label>
-        <label class="layer-item"><input type="checkbox" id="layerHeatmap"> Activity Heatmap</label>
+        <div class="layer-panel-title">Kartlag</div>
+        <label class="layer-item"><input type="checkbox" checked id="layerStreets"> Gater</label>
+        <label class="layer-item"><input type="checkbox" checked id="layerSatellite"> Satellittoverlegg</label>
+        <label class="layer-item"><input type="checkbox" checked id="layerUnits"> Enhetsposisjoner</label>
+        <label class="layer-item"><input type="checkbox" checked id="layerIncidents"> Hendelsesmarkører</label>
+        <label class="layer-item"><input type="checkbox" id="layerGrid"> Gridreferanse</label>
+        <label class="layer-item"><input type="checkbox" id="layerHeatmap"> Aktivitetsvarmekart</label>
       </div>
 
-      <!-- Map Search -->
+      <!-- Kartsøk -->
       <div class="map-search-bar">
         <svg style="padding-left:10px; color:#6b7280;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="mapSearch" placeholder="Search location…" />
+        <input type="text" id="mapSearch" placeholder="Søk sted…" />
         <button class="map-search-btn">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
       </div>
 
-      <!-- Map Info Bar -->
+      <!-- Kartinforad -->
       <div class="map-info-bar">
         <span id="mapCoords">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          Hover map for coordinates
+          Hold musepeker over kartet for koordinater
         </span>
         <span id="mapZoom">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -330,23 +321,31 @@
         </span>
         <span>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          14 units tracking
+          <span id="mapUnitCount">14 enheter spores</span>
         </span>
         <span style="margin-left:auto; color:var(--accent-green);">
-          ● Map sync active
+          ● Kartsynkronisering aktiv
         </span>
       </div>
+
+      <!-- Kartbakgrunn-knapp (nederst til høyre) -->
+      <button class="basemap-toggle-btn" id="basemapToggleBtn" title="Bytt kartbakgrunn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <span class="basemap-label">Lyst kart</span>
+      </button>
     </div>
   </div>
 
-  <!-- Broadcast Modal -->
+  <!-- Kringkastingsmodal -->
   <div id="broadcastModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center;">
     <div style="background:var(--bg-panel); border:1px solid var(--border-color); border-radius:8px; padding:20px; width:380px; max-width:90vw;">
-      <h3 style="margin-bottom:12px; font-size:14px;">📡 Send Broadcast Message</h3>
-      <textarea id="broadcastText" style="width:100%; height:80px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:4px; color:var(--text-primary); font-size:13px; padding:8px; resize:none; font-family:inherit; outline:none;" placeholder="Type your broadcast message…"></textarea>
+      <h3 style="margin-bottom:12px; font-size:14px;">📡 Send kringkastmelding</h3>
+      <textarea id="broadcastText" style="width:100%; height:80px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:4px; color:var(--text-primary); font-size:13px; padding:8px; resize:none; font-family:inherit; outline:none;" placeholder="Skriv din kringkastmelding…"></textarea>
       <div style="display:flex; gap:8px; margin-top:10px; justify-content:flex-end;">
-        <button class="header-btn" id="cancelBroadcast">Cancel</button>
-        <button class="header-btn primary" id="sendBroadcast">Send to All Units</button>
+        <button class="header-btn" id="cancelBroadcast">Avbryt</button>
+        <button class="header-btn primary" id="sendBroadcast">Send til alle enheter</button>
       </div>
     </div>
   </div>

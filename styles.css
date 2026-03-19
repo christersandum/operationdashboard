@@ -1168,3 +1168,78 @@ body {
   background: rgba(0, 120, 212, 0.1);
   color: var(--accent-blue);
 }
+
+/* ---- Operasjonsveksler ---- */
+.operation-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background: var(--bg-panel-header);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+  height: 32px;
+}
+
+.operation-select-wrap svg {
+  flex-shrink: 0;
+  color: var(--accent-blue);
+}
+
+.operation-select {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0 4px;
+  min-width: 200px;
+}
+
+.operation-select option {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+/* ---- Kartbakgrunn-veksler (nederst til høyre) ---- */
+.basemap-toggle-btn {
+  position: absolute;
+  bottom: 34px; /* above the map-info-bar */
+  right: 12px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: rgba(26, 29, 35, 0.92);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  backdrop-filter: blur(4px);
+  font-family: inherit;
+}
+
+.basemap-toggle-btn:hover {
+  background: rgba(0, 120, 212, 0.85);
+  color: #fff;
+  border-color: var(--accent-blue);
+}
+
+.basemap-toggle-btn.light-active {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a1d23;
+  border-color: #aaa;
+}
+
+.basemap-toggle-btn.light-active:hover {
+  background: rgba(0, 120, 212, 0.15);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
