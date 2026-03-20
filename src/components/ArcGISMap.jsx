@@ -9,8 +9,13 @@ import Polygon from '@arcgis/core/geometry/Polygon';
 import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol';
 import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import SimpleMarkerSymbol from '@arcgis/core/symbols/SimpleMarkerSymbol';
+import TextSymbol from '@arcgis/core/symbols/TextSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import { LIGHT_BASEMAP_URL, DARK_BASEMAP_URL, INCIDENT_COLORS } from '../data';
+
+// Mission marker positioning: offset from incident so markers don't overlap
+const MISSION_MARKER_OFFSET = 0.001; // ~100m in degrees
+const MISSION_GRID_COLS     = 3;      // arrange markers in 3-column grid
 
 export default function ArcGISMap({
   center,
@@ -18,6 +23,7 @@ export default function ArcGISMap({
   basemap,
   units,
   incidents,
+  missions,
   aoCoords,
   aoLabel,
   onViewReady,
@@ -31,9 +37,11 @@ export default function ArcGISMap({
   const lightLayerRef = useRef(null);
   const unitLayerRef  = useRef(null);
   const incidentLayerRef = useRef(null);
+  const missionLayerRef  = useRef(null);
   const aoLayerRef    = useRef(null);
-  const unitGraphicsRef = useRef({});  // id → Graphic
-  const incidentGraphicsRef = useRef({});  // id → Graphic
+  const unitGraphicsRef     = useRef({});
+  const incidentGraphicsRef = useRef({});
+  const missionGraphicsRef  = useRef({});
   const basemapRef  = useRef(basemap);
 
   // ── Init map once ──────────────────────────────────────────
@@ -47,13 +55,15 @@ export default function ArcGISMap({
 
     const unitLayer     = new GraphicsLayer({ id: 'units' });
     const incidentLayer = new GraphicsLayer({ id: 'incidents' });
+    const missionLayer  = new GraphicsLayer({ id: 'missions' });
     const aoLayer       = new GraphicsLayer({ id: 'ao' });
     unitLayerRef.current     = unitLayer;
     incidentLayerRef.current = incidentLayer;
+    missionLayerRef.current  = missionLayer;
     aoLayerRef.current       = aoLayer;
 
     const arcgisMap = new Map({
-      layers: [darkLayer, aoLayer, incidentLayer, unitLayer],
+      layers: [darkLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
     });
     mapRef.current = arcgisMap;
 
@@ -138,16 +148,13 @@ export default function ArcGISMap({
     units.forEach(unit => {
       const color = getUnitColor(unit);
       const statusColor = getStatusColor(unit.status);
-
       const pt = new Point({ longitude: unit.lng, latitude: unit.lat, spatialReference: { wkid: 4326 } });
 
       if (unitGraphicsRef.current[unit.id]) {
-        // Update existing
         const g = unitGraphicsRef.current[unit.id];
         g.geometry = pt;
         g.symbol   = makeUnitSymbol(color, statusColor);
       } else {
-        // Add new
         const g = new Graphic({
           geometry: pt,
           symbol: makeUnitSymbol(color, statusColor),
@@ -160,7 +167,6 @@ export default function ArcGISMap({
       existingIds.delete(unit.id);
     });
 
-    // Remove graphics for units no longer present
     existingIds.forEach(id => {
       const g = unitGraphicsRef.current[id];
       if (g) layer.remove(g);
@@ -175,15 +181,15 @@ export default function ArcGISMap({
     const existingIds = new Set(Object.keys(incidentGraphicsRef.current));
 
     incidents.forEach(inc => {
-      const priorityColor = inc.priority === 'high' ? [231, 76, 60]
-        : inc.priority === 'medium' ? [243, 156, 18] : [46, 204, 113];
-
+      const priorityColor = getPriorityColor(inc.priority);
       const pt = new Point({ longitude: inc.lng, latitude: inc.lat, spatialReference: { wkid: 4326 } });
 
-      if (!incidentGraphicsRef.current[inc.id]) {
+      if (incidentGraphicsRef.current[inc.id]) {
+        incidentGraphicsRef.current[inc.id].geometry = pt;
+      } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeIncidentSymbol(priorityColor),
+          symbol: makeIncidentSymbol(priorityColor, inc.icon),
           attributes: { ...inc },
           popupTemplate: makeIncidentPopupTemplate(inc),
         });
@@ -193,7 +199,6 @@ export default function ArcGISMap({
       existingIds.delete(inc.id);
     });
 
-    // Remove old
     existingIds.forEach(id => {
       const g = incidentGraphicsRef.current[id];
       if (g) layer.remove(g);
@@ -201,25 +206,76 @@ export default function ArcGISMap({
     });
   }, [incidents]);
 
+  // ── Mission graphics ────────────────────────────────────────
+  useEffect(() => {
+    if (!missionLayerRef.current || !incidents) return;
+    const layer = missionLayerRef.current;
+    const existingIds = new Set(Object.keys(missionGraphicsRef.current));
+
+    (missions || []).forEach((mission, idx) => {
+      const inc = incidents.find(i => i.id === mission.incidentId);
+      if (!inc) return;
+
+      const offsetLat = inc.lat + MISSION_MARKER_OFFSET * (idx % MISSION_GRID_COLS - 1);
+      const offsetLng = inc.lng + MISSION_MARKER_OFFSET * Math.floor(idx / MISSION_GRID_COLS);
+
+      const pt = new Point({ longitude: offsetLng, latitude: offsetLat, spatialReference: { wkid: 4326 } });
+      const completed = mission.status === 'completed';
+
+      if (missionGraphicsRef.current[mission.id]) {
+        const g = missionGraphicsRef.current[mission.id];
+        g.geometry = pt;
+        g.symbol = makeMissionSymbol(completed);
+      } else {
+        const g = new Graphic({
+          geometry: pt,
+          symbol: makeMissionSymbol(completed),
+          attributes: { ...mission },
+          popupTemplate: new PopupTemplate({
+            title: `📋 ${mission.title}`,
+            content: `<table style="font-size:12px; color:#e8eaf0; width:100%;">
+              <tr><td style="color:#9aa3b5">Status</td><td>${completed ? '✅ Fullført' : '🔴 Aktiv'}</td></tr>
+              <tr><td colspan="2" style="color:#9aa3b5; padding-top:4px">${mission.desc}</td></tr>
+            </table>`,
+          }),
+        });
+        layer.add(g);
+        missionGraphicsRef.current[mission.id] = g;
+      }
+      existingIds.delete(mission.id);
+    });
+
+    existingIds.forEach(id => {
+      const g = missionGraphicsRef.current[id];
+      if (g) layer.remove(g);
+      delete missionGraphicsRef.current[id];
+    });
+  }, [missions, incidents]);
+
   return (
-    <div
-      ref={mapDivRef}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div ref={mapDivRef} style={{ width: '100%', height: '100%' }} />
   );
 }
 
 // ── Helpers ────────────────────────────────────────────────
 
+function getPriorityColor(priority) {
+  if (priority === 'alarm')  return [220, 20, 60];
+  if (priority === 'high')   return [231, 76, 60];
+  if (priority === 'medium') return [243, 156, 18];
+  return [46, 204, 113];
+}
+
 function getUnitColor(unit) {
-  if (!unit.assignedIncident) return [107, 114, 128]; // grey if unassigned
+  if (!unit.assignedIncident) return [107, 114, 128];
   const idx = unit.incidentColorIndex ?? 0;
   const hex = INCIDENT_COLORS[idx % INCIDENT_COLORS.length];
   return hexToRgb(hex);
 }
 
 function getStatusColor(status) {
-  if (status === 'online')  return [46, 204, 113];
+  if (status === 'ledig' || status === 'online') return [46, 204, 113];
+  if (status === 'opptatt') return [243, 156, 18];
   if (status === 'warning') return [243, 156, 18];
   return [107, 114, 128];
 }
@@ -236,7 +292,7 @@ function makeUnitSymbol(color, statusColor) {
   });
 }
 
-function makeIncidentSymbol(color) {
+function makeIncidentSymbol(color, icon) {
   return new SimpleMarkerSymbol({
     style: 'square',
     color: [...color, 60],
@@ -245,8 +301,20 @@ function makeIncidentSymbol(color) {
   });
 }
 
+function makeMissionSymbol(completed) {
+  const color = completed ? [46, 204, 113] : [231, 76, 60];
+  return new SimpleMarkerSymbol({
+    style: 'square',
+    color: [...color, 180],
+    size: 12,
+    outline: { color: [...color, 255], width: 1.5 },
+  });
+}
+
 function makeUnitPopupTemplate(unit) {
-  const statusText  = unit.status === 'online' ? 'Online' : unit.status === 'warning' ? 'Advarsel' : 'Offline';
+  const statusText = unit.status === 'offline' ? 'Offline'
+    : unit.status === 'opptatt' ? 'Opptatt'
+    : 'Ledig';
   return new PopupTemplate({
     title: `<b>${unit.name}</b> — ${unit.id}`,
     content: `
@@ -260,7 +328,9 @@ function makeUnitPopupTemplate(unit) {
 }
 
 function makeIncidentPopupTemplate(inc) {
-  const priorityLabel = inc.priority === 'high' ? 'HØY' : inc.priority === 'medium' ? 'MEDIUM' : 'LAV';
+  const priorityLabel = inc.priority === 'alarm' ? '🚨 ALARM'
+    : inc.priority === 'high' ? 'HØY'
+    : inc.priority === 'medium' ? 'MEDIUM' : 'LAV';
   return new PopupTemplate({
     title: `${inc.icon} ${inc.title}`,
     content: `

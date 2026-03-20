@@ -14,25 +14,23 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
         || u.role.toLowerCase().includes(q)
         || u.id.toLowerCase().includes(q);
       const matchF = filter === 'all'
-        || (filter === 'online'  && u.status === 'online')
+        || (filter === 'ledig'   && (u.status === 'ledig' || u.status === 'online') && !u.assignedIncident)
+        || (filter === 'opptatt' && (u.status === 'opptatt' || (u.assignedIncident && u.status !== 'offline')))
         || (filter === 'moving'  && u.moving)
         || (filter === 'offline' && u.status === 'offline');
       return matchQ && matchF;
     });
   }, [units, query, filter]);
 
-  // Group by incident assignment, then unassigned
   const groups = useMemo(() => {
     const unassigned = filtered.filter(u => !u.assignedIncident);
     const incidentGroups = {};
-
     incidents.forEach(inc => {
       const inGroup = filtered.filter(u => u.assignedIncident === inc.id);
       if (inGroup.length > 0) {
         incidentGroups[inc.id] = { incident: inc, units: inGroup };
       }
     });
-
     return { unassigned, incidentGroups };
   }, [filtered, incidents]);
 
@@ -40,6 +38,14 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
     setSelectedId(unit.id);
     if (onUnitClick) onUnitClick(unit);
   };
+
+  const filterDefs = [
+    { id: 'all',     label: 'Alle' },
+    { id: 'ledig',   label: 'Ledig' },
+    { id: 'opptatt', label: 'Opptatt' },
+    { id: 'moving',  label: 'I bevegelse' },
+    { id: 'offline', label: 'Offline' },
+  ];
 
   return (
     <>
@@ -72,13 +78,13 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
       </div>
 
       <div className="filter-pills">
-        {['all', 'online', 'moving', 'offline'].map(f => (
+        {filterDefs.map(f => (
           <span
-            key={f}
-            className={`filter-pill${filter === f ? ' active' : ''}`}
-            onClick={() => setFilter(f)}
+            key={f.id}
+            className={`filter-pill${filter === f.id ? ' active' : ''}`}
+            onClick={() => setFilter(f.id)}
           >
-            {f === 'all' ? 'Alle' : f === 'online' ? 'Online' : f === 'moving' ? 'I bevegelse' : 'Offline'}
+            {f.label}
           </span>
         ))}
       </div>
@@ -90,7 +96,6 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
           </div>
         )}
 
-        {/* Unassigned group */}
         {groups.unassigned.length > 0 && (
           <>
             <div className="group-header">
@@ -103,7 +108,6 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
           </>
         )}
 
-        {/* Incident groups */}
         {Object.values(groups.incidentGroups).map(({ incident, units: gu }, idx) => {
           const incColor = INCIDENT_COLORS[incident.colorIndex ?? idx % INCIDENT_COLORS.length];
           return (
@@ -125,9 +129,23 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
   );
 }
 
+function getStatusColor(unit) {
+  if (unit.status === 'offline') return '#6b7280';
+  if (unit.status === 'warning') return '#f39c12';
+  if (unit.status === 'opptatt') return '#f39c12';
+  if (unit.assignedIncident)    return '#f39c12'; // assigned = opptatt
+  return '#2ecc71'; // ledig / online
+}
+
+function getStatusText(unit) {
+  if (unit.status === 'offline') return 'Offline';
+  if (unit.status === 'opptatt' || (unit.assignedIncident && unit.status !== 'offline')) return 'Opptatt';
+  return 'Ledig';
+}
+
 function UnitItem({ unit, selected, onClick, incidentColor }) {
-  const statusColor = unit.status === 'online' ? '#2ecc71'
-    : unit.status === 'warning' ? '#f39c12' : '#6b7280';
+  const statusColor = getStatusColor(unit);
+  const statusText  = getStatusText(unit);
   const avatarColor = incidentColor || '#6b7280';
 
   return (
@@ -151,7 +169,7 @@ function UnitItem({ unit, selected, onClick, incidentColor }) {
         )}
       </div>
       <div className="participant-meta">
-        <div className="participant-time">{unit.status === 'offline' ? 'Offline' : 'Live'}</div>
+        <div className="participant-time" style={{ color: statusColor }}>{statusText}</div>
         <div className="participant-signal">
           {[1,2,3,4].map(i => (
             <div

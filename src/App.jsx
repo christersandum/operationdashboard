@@ -6,17 +6,13 @@ import ArcGISMap from './components/ArcGISMap';
 import {
   OPERATION_CONFIG,
   INCIDENTS_SWORD_STAGED,
+  MISSIONS_SWORD_STAGED,
   INCIDENT_COLORS,
 } from './data';
 
-// Movement speed (degrees per tick)
 const UNIT_MOVE_SPEED  = 0.004;
 const UNIT_RANDOM_STEP = 0.003;
-
-// Arrive threshold in degrees (~400m)
 const ARRIVE_DIST = 0.003;
-
-// Time before "arrival" follow-up messages
 const ARRIVAL_MSG_DELAY = 30000;
 
 function nowTime() {
@@ -44,6 +40,7 @@ export default function App() {
   const [currentOpId,    setCurrentOpId]    = useState('norwegian-sword');
   const [units,          setUnits]          = useState([]);
   const [incidents,      setIncidents]      = useState([]);
+  const [missions,       setMissions]       = useState([]);
   const [chatHistory,    setChatHistory]    = useState([]);
   const [stats,          setStats]          = useState({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
   const [missionStartTime, setMissionStartTime] = useState(null);
@@ -60,25 +57,35 @@ export default function App() {
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [unitsVisible,   setUnitsVisible]   = useState(true);
   const [incidentsVisible, setIncidentsVisible] = useState(true);
+  const [missionsVisible, setMissionsVisible] = useState(true);
+  const [scenarioEnded,  setScenarioEnded]  = useState(false);
+  const [isPlaying,      setIsPlaying]      = useState(true);
+  const [playbackSpeed,  setPlaybackSpeed]  = useState(1);
+  const [scenarioProgress, setScenarioProgress] = useState(0);
+  const SCENARIO_TOTAL_MS = 205000; // 140s last incident + ~65s for arrival msgs + bank chat
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
+  const progressInterval = useRef(null);
+  const simStartRef  = useRef(null);
   const viewRef      = useRef(null);
-  const unitsRef     = useRef([]);      // mutable copy for movement
+  const unitsRef     = useRef([]);
   const incidentsRef = useRef([]);
+  const missionsRef  = useRef([]);
   const chatIdRef    = useRef(100);
-  const activeTabRef = useRef('overview'); // track active tab without stale closure
+  const activeTabRef = useRef('overview');
+  const arrivedRef   = useRef(new Set());
+  const isPlayingRef = useRef(true);
+  const playbackSpeedRef = useRef(1);
 
-  // ── Load operation ──────────────────────────────────────────
   const loadOperation = useCallback((opId) => {
-    // Cancel any running timers
     simTimers.current.forEach(clearTimeout);
     simTimers.current = [];
     if (moveInterval.current) clearInterval(moveInterval.current);
+    if (progressInterval.current) clearInterval(progressInterval.current);
 
     const op = OPERATION_CONFIG[opId];
 
-    // Deep-copy units with initial state
     const freshUnits = op.units.map(u => ({
       ...u,
       target:           null,
@@ -93,6 +100,10 @@ export default function App() {
     incidentsRef.current = freshIncidents;
     setIncidents([...freshIncidents]);
 
+    missionsRef.current = [];
+    setMissions([]);
+    arrivedRef.current = new Set();
+
     const freshChat = op.chat.map((m, i) => ({ ...m, id: i }));
     chatIdRef.current = freshChat.length + 1;
     setChatHistory([...freshChat]);
@@ -101,25 +112,41 @@ export default function App() {
     setCurrentOpId(opId);
     setMapCenter([...op.center]);
     setMapZoom(op.zoom);
+    setScenarioEnded(false);
+    setScenarioProgress(0);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    playbackSpeedRef.current = 1;
+    setPlaybackSpeed(1);
 
     const startTime = Date.now() - (op.elapsed || 0);
     setMissionStartTime(startTime);
+    simStartRef.current = Date.now();
 
     if (op.staged) {
       startStagedSimulation(freshUnits, freshIncidents);
     }
 
-    // Start movement loop
+    // Progress tracking interval
+    if (op.staged) {
+      progressInterval.current = setInterval(() => {
+        if (!simStartRef.current || !isPlayingRef.current) return;
+        const elapsed = Date.now() - simStartRef.current;
+        const pct = Math.min(100, Math.round((elapsed / SCENARIO_TOTAL_MS) * 100));
+        setScenarioProgress(pct);
+        if (pct >= 100) clearInterval(progressInterval.current);
+      }, 500);
+    }
+
     moveInterval.current = setInterval(() => {
       tickMovement();
     }, 3000);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Staged simulation (Norwegian Sword) ─────────────────────
   function startStagedSimulation(initialUnits, initialIncidents) {
-    INCIDENTS_SWORD_STAGED.forEach((incData, stageIdx) => {
+    INCIDENTS_SWORD_STAGED.forEach((incData) => {
       const t = setTimeout(() => {
-        if (/* check still on this op */ unitsRef.current.length === 0) return;
+        if (unitsRef.current.length === 0) return;
 
         const now = nowTime();
         const inc = {
@@ -134,35 +161,43 @@ export default function App() {
           colorIndex: incData.colorIndex,
         };
 
-        // Add incident
         incidentsRef.current = [...incidentsRef.current, inc];
         setIncidents([...incidentsRef.current]);
 
-        // Update unread count
         if (activeTabRef.current !== 'incidents') {
           setUnreadIncidents(n => n + 1);
         }
 
-        // Update stats
         setStats(prev => ({
           ...prev,
           incidents: incidentsRef.current.length,
         }));
 
-        // Allocate units
+        let assignedUnitIds = [];
+
         if (incData.assignAll) {
-          // All units to bank
+          // Bank robbery: bring P3 and U1 online first
+          unitsRef.current = unitsRef.current.map(u => {
+            if (u.id === 'P3' || u.id === 'U1') {
+              return { ...u, status: 'ledig' };
+            }
+            return u;
+          });
+
+          // All non-offline units to bank
           unitsRef.current = unitsRef.current.map(u => ({
             ...u,
             target: { lat: incData.lat, lng: incData.lng },
             moving: u.status !== 'offline',
             assignedIncident: u.status !== 'offline' ? incData.id : u.assignedIncident,
             incidentColorIndex: incData.colorIndex,
+            status: u.status === 'offline' ? 'offline' : 'opptatt',
           }));
+          assignedUnitIds = unitsRef.current.filter(u => u.status !== 'offline').map(u => u.id);
         } else {
-          // Find 2 closest free
           const toAssign = findClosestFreeUnits(inc, unitsRef.current, 2);
           const assignIds = new Set(toAssign.map(u => u.id));
+          assignedUnitIds = [...assignIds];
 
           unitsRef.current = unitsRef.current.map(u => {
             if (assignIds.has(u.id)) {
@@ -172,18 +207,17 @@ export default function App() {
                 moving: true,
                 assignedIncident: incData.id,
                 incidentColorIndex: incData.colorIndex,
+                status: 'opptatt',
               };
             }
             return u;
           });
 
-          // Chat: dispatch notification
           const dispatched = toAssign.map(u => u.name).join(' og ');
           addSystemChat(
             `🚨 Ny hendelse: ${incData.title} — ${incData.desc}`,
             '#e74c3c'
           );
-          // Short delay then dispatch message
           setTimeout(() => {
             addSystemChat(
               `🚓 ${dispatched} utsendt til ${incData.title}`,
@@ -192,13 +226,27 @@ export default function App() {
           }, 2000);
         }
 
-        // Incident-specific chat
+        setUnits([...unitsRef.current]);
+
+        // Create missions for this incident
+        const incMissions = MISSIONS_SWORD_STAGED.filter(m => m.incidentId === incData.id);
+        const newMissions = incMissions.map((m, idx) => {
+          let missionUnits = [];
+          if (incData.assignAll) {
+            missionUnits = assignedUnitIds.filter((_, i) => i % incMissions.length === idx);
+          } else {
+            missionUnits = [assignedUnitIds[idx % assignedUnitIds.length]].filter(Boolean);
+          }
+          return { ...m, assignedUnitIds: missionUnits };
+        });
+
+        missionsRef.current = [...missionsRef.current, ...newMissions];
+        setMissions([...missionsRef.current]);
+
+        // Incident-specific chat messages
         incData.chatMessages.forEach((msg, msgIdx) => {
           setTimeout(() => {
             addChat({ ...msg, time: nowTime() });
-            if (incData.assignAll) {
-              // extra arrival messages later
-            }
           }, 3000 + msgIdx * 4000);
         });
 
@@ -210,14 +258,21 @@ export default function App() {
           }, arrivalDelay + msgIdx * 5000);
         });
 
-        setUnits([...unitsRef.current]);
+        // Scenario end: after bank robbery arrival messages + 30s
+        if (incData.assignAll) {
+          const scenarioEndDelay = arrivalDelay
+            + incData.arrivalMessages.length * 5000
+            + 30000;
+          setTimeout(() => {
+            setScenarioEnded(true);
+          }, scenarioEndDelay);
+        }
       }, incData.delay);
 
       simTimers.current.push(t);
     });
   }
 
-  // ── Movement tick ───────────────────────────────────────────
   function tickMovement() {
     let changed = false;
     const updated = unitsRef.current.map(unit => {
@@ -235,6 +290,11 @@ export default function App() {
             moving: true,
           };
         } else {
+          // Unit arrived
+          if (!arrivedRef.current.has(unit.id)) {
+            arrivedRef.current.add(unit.id);
+            checkMissionCompletion(unit.id);
+          }
           changed = true;
           return { ...unit, moving: false, target: null };
         }
@@ -255,7 +315,24 @@ export default function App() {
     }
   }
 
-  // ── Chat helpers ────────────────────────────────────────────
+  function checkMissionCompletion(arrivedUnitId) {
+    let anyUpdated = false;
+    const updatedMissions = missionsRef.current.map(m => {
+      if (m.status === 'completed') return m;
+      if (!m.assignedUnitIds || !m.assignedUnitIds.includes(arrivedUnitId)) return m;
+      const allArrived = m.assignedUnitIds.every(uid => arrivedRef.current.has(uid));
+      if (allArrived) {
+        anyUpdated = true;
+        return { ...m, status: 'completed' };
+      }
+      return m;
+    });
+    if (anyUpdated) {
+      missionsRef.current = updatedMissions;
+      setMissions([...updatedMissions]);
+    }
+  }
+
   function addSystemChat(text, color = '#6b7280') {
     addChat({ sender: 'System', initials: '⚙', color, system: true, text });
   }
@@ -269,21 +346,47 @@ export default function App() {
     }
   }
 
-  // ── Initial load ────────────────────────────────────────────
   useEffect(() => {
     loadOperation('norwegian-sword');
     return () => {
       simTimers.current.forEach(clearTimeout);
       if (moveInterval.current) clearInterval(moveInterval.current);
+      if (progressInterval.current) clearInterval(progressInterval.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Operation switch ────────────────────────────────────────
+  const handlePlayPause = useCallback(() => {
+    const nowPlaying = !isPlayingRef.current;
+    isPlayingRef.current = nowPlaying;
+    setIsPlaying(nowPlaying);
+    if (nowPlaying) {
+      // Resume movement
+      if (!moveInterval.current) {
+        moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+      }
+    } else {
+      // Pause movement
+      if (moveInterval.current) {
+        clearInterval(moveInterval.current);
+        moveInterval.current = null;
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSpeedChange = useCallback((speed) => {
+    playbackSpeedRef.current = speed;
+    setPlaybackSpeed(speed);
+    // Adjust movement interval speed
+    if (moveInterval.current) {
+      clearInterval(moveInterval.current);
+      moveInterval.current = setInterval(() => { tickMovement(); }, Math.max(500, 3000 / speed));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleOperationChange = useCallback((opId) => {
     loadOperation(opId);
   }, [loadOperation]);
 
-  // ── Tab change ──────────────────────────────────────────────
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
     activeTabRef.current = tab;
@@ -291,24 +394,20 @@ export default function App() {
     if (tab === 'incidents') setUnreadIncidents(0);
   }, []);
 
-  // ── Unit click → fly to ─────────────────────────────────────
   const handleUnitClick = useCallback((unit) => {
     setMapCenter([unit.lng, unit.lat]);
     setMapZoom(14);
   }, []);
 
-  // ── Incident click → fly to ─────────────────────────────────
   const handleIncidentClick = useCallback((inc) => {
     setMapCenter([inc.lng, inc.lat]);
     setMapZoom(14);
   }, []);
 
-  // ── Send chat message ───────────────────────────────────────
   const handleSendMessage = useCallback((text) => {
     addChat({ sender: 'Deg', initials: 'AU', color: '#0078d4', self: true, text });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Broadcast ───────────────────────────────────────────────
   const handleBroadcast = useCallback(() => setBroadcastOpen(true), []);
 
   const sendBroadcast = () => {
@@ -322,7 +421,6 @@ export default function App() {
     setActiveTab('chat');
   };
 
-  // ── Basemap toggle ──────────────────────────────────────────
   const toggleBasemap = useCallback(() => {
     setBasemap(b => b === 'dark' ? 'light' : 'dark');
   }, []);
@@ -335,6 +433,7 @@ export default function App() {
         currentOpId={currentOpId}
         onOperationChange={handleOperationChange}
         onBroadcast={handleBroadcast}
+        scenarioEnded={scenarioEnded}
       />
 
       <div className="main-layout">
@@ -342,6 +441,7 @@ export default function App() {
           opConfig={opConfig}
           units={units}
           incidents={incidents}
+          missions={missions}
           chatHistory={chatHistory}
           stats={stats}
           missionStartTime={missionStartTime}
@@ -361,6 +461,7 @@ export default function App() {
             basemap={basemap}
             units={unitsVisible ? units : []}
             incidents={incidentsVisible ? incidents : []}
+            missions={missionsVisible ? missions : []}
             aoCoords={opConfig.aoCoords}
             aoLabel={opConfig.aoLabel}
             onCoordMove={(lat, lng) => setMapCoords({ lat, lng })}
@@ -415,6 +516,10 @@ export default function App() {
                 <input type="checkbox" checked={incidentsVisible} onChange={e => setIncidentsVisible(e.target.checked)} />
                 Hendelsesmarkører
               </label>
+              <label className="layer-item">
+                <input type="checkbox" checked={missionsVisible} onChange={e => setMissionsVisible(e.target.checked)} />
+                Oppdrag
+              </label>
             </div>
           )}
 
@@ -468,6 +573,49 @@ export default function App() {
             </svg>
             <span>{basemap === 'dark' ? 'Lyst kart' : 'Mørkt kart'}</span>
           </button>
+
+          {/* Time Player */}
+          {opConfig.staged && (
+            <div className="time-player">
+              <button
+                className="time-player-btn"
+                onClick={handlePlayPause}
+                title={isPlaying ? 'Pause' : 'Spill av'}
+              >
+                {isPlaying ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                )}
+              </button>
+              <div className="time-player-speeds">
+                {[1, 2, 4].map(s => (
+                  <button
+                    key={s}
+                    className={`time-player-speed-btn${playbackSpeed === s ? ' active' : ''}`}
+                    onClick={() => handleSpeedChange(s)}
+                  >
+                    {s}x
+                  </button>
+                ))}
+              </div>
+              <div className="time-player-progress-wrap">
+                <div className="time-player-progress-bar">
+                  <div
+                    className="time-player-progress-fill"
+                    style={{ width: `${scenarioProgress}%`, background: scenarioEnded ? '#e74c3c' : '#0078d4' }}
+                  />
+                </div>
+                <span className="time-player-pct">
+                  {scenarioEnded ? '✓ Ferdig' : `${scenarioProgress}%`}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -491,7 +639,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Close layer panel on outside click */}
       {layerPanelOpen && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 5 }}
