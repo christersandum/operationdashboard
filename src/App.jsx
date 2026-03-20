@@ -57,10 +57,17 @@ export default function App() {
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [unitsVisible,   setUnitsVisible]   = useState(true);
   const [incidentsVisible, setIncidentsVisible] = useState(true);
+  const [missionsVisible, setMissionsVisible] = useState(true);
   const [scenarioEnded,  setScenarioEnded]  = useState(false);
+  const [isPlaying,      setIsPlaying]      = useState(true);
+  const [playbackSpeed,  setPlaybackSpeed]  = useState(1);
+  const [scenarioProgress, setScenarioProgress] = useState(0);
+  const SCENARIO_TOTAL_MS = 170000; // total ms for full scenario
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
+  const progressInterval = useRef(null);
+  const simStartRef  = useRef(null);
   const viewRef      = useRef(null);
   const unitsRef     = useRef([]);
   const incidentsRef = useRef([]);
@@ -68,11 +75,14 @@ export default function App() {
   const chatIdRef    = useRef(100);
   const activeTabRef = useRef('overview');
   const arrivedRef   = useRef(new Set());
+  const isPlayingRef = useRef(true);
+  const playbackSpeedRef = useRef(1);
 
   const loadOperation = useCallback((opId) => {
     simTimers.current.forEach(clearTimeout);
     simTimers.current = [];
     if (moveInterval.current) clearInterval(moveInterval.current);
+    if (progressInterval.current) clearInterval(progressInterval.current);
 
     const op = OPERATION_CONFIG[opId];
 
@@ -103,12 +113,29 @@ export default function App() {
     setMapCenter([...op.center]);
     setMapZoom(op.zoom);
     setScenarioEnded(false);
+    setScenarioProgress(0);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    playbackSpeedRef.current = 1;
+    setPlaybackSpeed(1);
 
     const startTime = Date.now() - (op.elapsed || 0);
     setMissionStartTime(startTime);
+    simStartRef.current = Date.now();
 
     if (op.staged) {
       startStagedSimulation(freshUnits, freshIncidents);
+    }
+
+    // Progress tracking interval
+    if (op.staged) {
+      progressInterval.current = setInterval(() => {
+        if (!simStartRef.current || !isPlayingRef.current) return;
+        const elapsed = Date.now() - simStartRef.current;
+        const pct = Math.min(100, Math.round((elapsed / SCENARIO_TOTAL_MS) * 100));
+        setScenarioProgress(pct);
+        if (pct >= 100) clearInterval(progressInterval.current);
+      }, 500);
     }
 
     moveInterval.current = setInterval(() => {
@@ -324,7 +351,36 @@ export default function App() {
     return () => {
       simTimers.current.forEach(clearTimeout);
       if (moveInterval.current) clearInterval(moveInterval.current);
+      if (progressInterval.current) clearInterval(progressInterval.current);
     };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePlayPause = useCallback(() => {
+    const nowPlaying = !isPlayingRef.current;
+    isPlayingRef.current = nowPlaying;
+    setIsPlaying(nowPlaying);
+    if (nowPlaying) {
+      // Resume movement
+      if (!moveInterval.current) {
+        moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+      }
+    } else {
+      // Pause movement
+      if (moveInterval.current) {
+        clearInterval(moveInterval.current);
+        moveInterval.current = null;
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSpeedChange = useCallback((speed) => {
+    playbackSpeedRef.current = speed;
+    setPlaybackSpeed(speed);
+    // Adjust movement interval speed
+    if (moveInterval.current) {
+      clearInterval(moveInterval.current);
+      moveInterval.current = setInterval(() => { tickMovement(); }, Math.max(500, 3000 / speed));
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOperationChange = useCallback((opId) => {
@@ -405,7 +461,7 @@ export default function App() {
             basemap={basemap}
             units={unitsVisible ? units : []}
             incidents={incidentsVisible ? incidents : []}
-            missions={missions}
+            missions={missionsVisible ? missions : []}
             aoCoords={opConfig.aoCoords}
             aoLabel={opConfig.aoLabel}
             onCoordMove={(lat, lng) => setMapCoords({ lat, lng })}
@@ -460,6 +516,10 @@ export default function App() {
                 <input type="checkbox" checked={incidentsVisible} onChange={e => setIncidentsVisible(e.target.checked)} />
                 Hendelsesmarkører
               </label>
+              <label className="layer-item">
+                <input type="checkbox" checked={missionsVisible} onChange={e => setMissionsVisible(e.target.checked)} />
+                Oppdrag
+              </label>
             </div>
           )}
 
@@ -513,6 +573,49 @@ export default function App() {
             </svg>
             <span>{basemap === 'dark' ? 'Lyst kart' : 'Mørkt kart'}</span>
           </button>
+
+          {/* Time Player */}
+          {opConfig.staged && (
+            <div className="time-player">
+              <button
+                className="time-player-btn"
+                onClick={handlePlayPause}
+                title={isPlaying ? 'Pause' : 'Spill av'}
+              >
+                {isPlaying ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                )}
+              </button>
+              <div className="time-player-speeds">
+                {[1, 2, 4].map(s => (
+                  <button
+                    key={s}
+                    className={`time-player-speed-btn${playbackSpeed === s ? ' active' : ''}`}
+                    onClick={() => handleSpeedChange(s)}
+                  >
+                    {s}x
+                  </button>
+                ))}
+              </div>
+              <div className="time-player-progress-wrap">
+                <div className="time-player-progress-bar">
+                  <div
+                    className="time-player-progress-fill"
+                    style={{ width: `${scenarioProgress}%`, background: scenarioEnded ? '#e74c3c' : '#0078d4' }}
+                  />
+                </div>
+                <span className="time-player-pct">
+                  {scenarioEnded ? '✓ Ferdig' : `${scenarioProgress}%`}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
