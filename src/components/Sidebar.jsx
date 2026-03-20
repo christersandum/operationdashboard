@@ -1,13 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import OverviewTab from './tabs/OverviewTab';
 import UnitsTab from './tabs/UnitsTab';
 import IncidentsTab from './tabs/IncidentsTab';
+import MissionsTab from './tabs/MissionsTab';
 import ChatTab from './tabs/ChatTab';
 
 export default function Sidebar({
   opConfig,
   units,
   incidents,
+  missions,
   chatHistory,
   stats,
   missionStartTime,
@@ -25,22 +27,18 @@ export default function Sidebar({
     if (onTabChange) onTabChange(tab);
   };
 
+  const openMissions = (missions || []).filter(m => m.status !== 'completed').length;
+
   const tabs = [
-    { id: 'overview',     label: 'Oversikt',  badge: null },
-    { id: 'participants', label: 'Enheter',   badge: null },
-    {
-      id: 'incidents', label: 'Hendelser',
-      badge: unreadIncidents > 0 ? unreadIncidents : null,
-    },
-    {
-      id: 'chat', label: 'Chat',
-      badge: unreadChat > 0 ? unreadChat : null,
-    },
+    { id: 'overview',      label: 'Oversikt',  badge: null },
+    { id: 'participants',  label: 'Enheter',   badge: null },
+    { id: 'incidents',     label: 'Hendelser', badge: unreadIncidents > 0 ? unreadIncidents : null },
+    { id: 'missions',      label: 'Oppdrag',   badge: openMissions > 0 ? openMissions : null },
+    { id: 'chat',          label: 'Chat',      badge: unreadChat > 0 ? unreadChat : null },
   ];
 
   return (
     <aside className="sidebar">
-      {/* Tab bar */}
       <nav className="tab-bar">
         {tabs.map(t => (
           <button
@@ -57,36 +55,20 @@ export default function Sidebar({
         ))}
       </nav>
 
-      {/* Tab content */}
       <div className={`tab-content${activeTab === 'overview' ? ' active' : ''}`} id="tab-overview">
-        <OverviewTab
-          opConfig={opConfig}
-          stats={stats}
-          missionStartTime={missionStartTime}
-        />
+        <OverviewTab opConfig={opConfig} stats={stats} missionStartTime={missionStartTime} units={units} />
       </div>
-
       <div className={`tab-content${activeTab === 'participants' ? ' active' : ''}`} id="tab-participants">
-        <UnitsTab
-          units={units}
-          incidents={incidents}
-          onUnitClick={onUnitClick}
-        />
+        <UnitsTab units={units} incidents={incidents} onUnitClick={onUnitClick} />
       </div>
-
       <div className={`tab-content${activeTab === 'incidents' ? ' active' : ''}`} id="tab-incidents">
-        <IncidentsTab
-          incidents={incidents}
-          units={units}
-          onIncidentClick={onIncidentClick}
-        />
+        <IncidentsTab incidents={incidents} units={units} onIncidentClick={onIncidentClick} />
       </div>
-
+      <div className={`tab-content${activeTab === 'missions' ? ' active' : ''}`} id="tab-missions">
+        <MissionsTab missions={missions || []} units={units} incidents={incidents} />
+      </div>
       <div className={`tab-content${activeTab === 'chat' ? ' active' : ''}`} id="tab-chat">
-        <ChatTab
-          messages={chatHistory}
-          onSend={onSendMessage}
-        />
+        <ChatTab messages={chatHistory} onSend={onSendMessage} />
       </div>
     </aside>
   );
@@ -116,6 +98,13 @@ function TabIcon({ id }) {
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
           <line x1="12" y1="9" x2="12" y2="13"/>
           <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      );
+    case 'missions':
+      return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="9 11 12 14 22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
         </svg>
       );
     case 'chat':

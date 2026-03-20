@@ -51,7 +51,7 @@ export const CHAT_NS = [
 export const UNITS_SWORD = [
   { id: 'P1', name: 'Patrulje-1',  role: 'Politipatrulje',  status: 'online', moving: false, lat: 59.940, lng: 10.710 },
   { id: 'P2', name: 'Patrulje-2',  role: 'Politipatrulje',  status: 'online', moving: false, lat: 59.897, lng: 10.785 },
-  { id: 'P3', name: 'Patrulje-3',  role: 'Politipatrulje',  status: 'online', moving: false, lat: 59.930, lng: 10.765 },
+  { id: 'P3', name: 'Patrulje-3',  role: 'Politipatrulje',  status: 'offline', moving: false, lat: 59.930, lng: 10.765 },
   { id: 'P4', name: 'Patrulje-4',  role: 'Politipatrulje',  status: 'online', moving: false, lat: 59.885, lng: 10.720 },
   { id: 'D1', name: 'Delta-1',     role: 'Beredskapstropp', status: 'online', moving: false, lat: 59.918, lng: 10.740 },
   { id: 'D2', name: 'Delta-2',     role: 'Beredskapstropp', status: 'online', moving: false, lat: 59.905, lng: 10.760 },
@@ -59,7 +59,7 @@ export const UNITS_SWORD = [
   { id: 'T2', name: 'Taktisk-2',   role: 'Taktisk team',    status: 'online', moving: false, lat: 59.895, lng: 10.698 },
   { id: 'K1', name: 'Kommando-1',  role: 'Kommandopost',    status: 'online', moving: false, lat: 59.920, lng: 10.730 },
   { id: 'L1', name: 'Lege-1',      role: 'Medisinsk enhet', status: 'online', moving: false, lat: 59.902, lng: 10.750 },
-  { id: 'U1', name: 'Utrykning-1', role: 'Utrykkingsenhet', status: 'online', moving: false, lat: 59.935, lng: 10.750 },
+  { id: 'U1', name: 'Utrykning-1', role: 'Utrykkingsenhet', status: 'offline', moving: false, lat: 59.935, lng: 10.750 },
   { id: 'E1', name: 'ETS-1',       role: 'Etterretning',    status: 'online', moving: false, lat: 59.910, lng: 10.708 },
 ];
 
@@ -76,7 +76,7 @@ export const INCIDENTS_SWORD_STAGED = [
   {
     id: 'HEN-001', title: 'Bil i brann', icon: '🔥',
     desc: 'Grønland — bil bevisst satt i brann nær T-banestasjonen',
-    priority: 'high', lat: 59.907, lng: 10.762, delay: 10000,
+    priority: 'medium', lat: 59.907, lng: 10.762, delay: 15000,
     assignAll: false, colorIndex: 0,
     chatMessages: [
       { sender: 'Operasjonssentral', initials: 'OS', color: '#e74c3c',
@@ -90,7 +90,7 @@ export const INCIDENTS_SWORD_STAGED = [
   {
     id: 'HEN-002', title: 'Kjøretøy sperrer vei', icon: '🚛',
     desc: 'Majorstua — lastebil etterlatt og blokkerer E18 i begge retninger',
-    priority: 'medium', lat: 59.926, lng: 10.715, delay: 25000,
+    priority: 'low', lat: 59.926, lng: 10.715, delay: 45000,
     assignAll: false, colorIndex: 1,
     chatMessages: [
       { sender: 'Operasjonssentral', initials: 'OS', color: '#f39c12',
@@ -104,7 +104,7 @@ export const INCIDENTS_SWORD_STAGED = [
   {
     id: 'HEN-003', title: 'Eksplosjon rapportert', icon: '💥',
     desc: 'Bryn — improvisert sprenglegeme detonert ved bensinstasjon',
-    priority: 'high', lat: 59.891, lng: 10.816, delay: 40000,
+    priority: 'high', lat: 59.891, lng: 10.816, delay: 75000,
     assignAll: false, colorIndex: 2,
     chatMessages: [
       { sender: 'Operasjonssentral', initials: 'OS', color: '#9b59b6',
@@ -120,7 +120,7 @@ export const INCIDENTS_SWORD_STAGED = [
   {
     id: 'HEN-004', title: 'Person overfalt', icon: '🚨',
     desc: 'Skøyen — person angrepet av gruppe på tre menn, vitner på stedet',
-    priority: 'high', lat: 59.892, lng: 10.690, delay: 55000,
+    priority: 'medium', lat: 59.925, lng: 10.765, delay: 105000,
     assignAll: false, colorIndex: 3,
     chatMessages: [
       { sender: 'Operasjonssentral', initials: 'OS', color: '#1abc9c',
@@ -136,7 +136,7 @@ export const INCIDENTS_SWORD_STAGED = [
   {
     id: 'HEN-005', title: 'BANKRØVERI PÅGÅR', icon: '🏦',
     desc: 'Oslo sentrum — Storgata Bank — bevæpnet ran pågår. ALLE ENHETER TIL STEDET UMIDDELBART!',
-    priority: 'high', lat: 59.913, lng: 10.741, delay: 75000,
+    priority: 'alarm', lat: 59.913, lng: 10.741, delay: 140000,
     assignAll: true, colorIndex: 0,
     chatMessages: [
       { sender: 'System', initials: '⚙', color: '#e74c3c', system: true,
@@ -209,9 +209,27 @@ export const OPERATION_CONFIG = {
     incidents: [],
     chat: CHAT_SWORD,
     staged: true,
-    stats: { units: 12, incidents: 0, tasks: 5, alerts: 1 },
+    stats: { units: 12, incidents: 0, tasks: 5, alerts: 3 },
     alerts: [
-      { icon: '⚠', iconBg: 'rgba(243,156,18,0.15)', iconColor: '#f39c12', text: 'Økt kriminalaktivitet rapportert i sentrum', time: '5 min siden' },
+      { icon: '⚠',  iconBg: 'rgba(243,156,18,0.15)', iconColor: '#f39c12', text: 'Økt kriminalaktivitet rapportert i sentrum', time: '5 min siden' },
+      { icon: '🔍', iconBg: 'rgba(155,89,182,0.15)', iconColor: '#9b59b6', text: 'Etterretning: Koordinerte aksjoner mulig', time: '12 min siden' },
+      { icon: '🏦', iconBg: 'rgba(231,76,60,0.15)',  iconColor: '#e74c3c', text: 'Kilde varsler om mulig bankran i Oslo', time: '18 min siden' },
     ],
   },
 };
+
+export const MISSIONS_SWORD_STAGED = [
+  { id: 'OPP-001', incidentId: 'HEN-001', title: 'Slukk brannen', desc: 'Brannslukking ved Grønland T-bane', status: 'active' },
+  { id: 'OPP-002', incidentId: 'HEN-001', title: 'Sikre perimeter', desc: 'Etabler sikkerhetsperimeter rundt brannstedet', status: 'active' },
+  { id: 'OPP-003', incidentId: 'HEN-002', title: 'Fjern kjøretøy', desc: 'Koordiner fjerning av blokkerende lastebil', status: 'active' },
+  { id: 'OPP-004', incidentId: 'HEN-002', title: 'Trafikkregulering', desc: 'Etabler alternativ trafikkrute ved Majorstua', status: 'active' },
+  { id: 'OPP-005', incidentId: 'HEN-003', title: 'Søk etter skadde', desc: 'Systematisk søk etter skadde ved eksplosjonsstedet', status: 'active' },
+  { id: 'OPP-006', incidentId: 'HEN-003', title: 'Sikre område', desc: 'Avsperr og sikre eksplosjonsstedet ved Bryn', status: 'active' },
+  { id: 'OPP-007', incidentId: 'HEN-004', title: 'Pågripelse', desc: 'Identifiser og pågrip gjerningspersonene', status: 'active' },
+  { id: 'OPP-008', incidentId: 'HEN-004', title: 'Medisinsk assistanse', desc: 'Yte medisinsk hjelp til overfallsofferet', status: 'active' },
+  { id: 'OPP-009', incidentId: 'HEN-005', title: 'Yte livredding', desc: 'Sikre at ingen liv går tapt under bankranet', status: 'active' },
+  { id: 'OPP-010', incidentId: 'HEN-005', title: 'Sikre gissler', desc: 'Etabler kontakt med ranerne om gisslenes sikkerhet', status: 'active' },
+  { id: 'OPP-011', incidentId: 'HEN-005', title: 'Omringe banken', desc: 'Plasser enheter rundt alle utganger av banken', status: 'active' },
+  { id: 'OPP-012', incidentId: 'HEN-005', title: 'Forhandle med ranere', desc: 'Forhandlingsleder etablerer kontakt med ranerne', status: 'active' },
+  { id: 'OPP-013', incidentId: 'HEN-005', title: 'Taktisk inntrengning', desc: 'Delta-team klargjør for taktisk inntrengning ved signal', status: 'active' },
+];
