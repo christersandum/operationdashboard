@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const TIMEZONES = [
   { id: 'UTC',                label: 'UTC',       abbr: 'UTC'  },
-  { id: 'Europe/Oslo',        label: 'Oslo',      abbr: 'CET'  },
-  { id: 'America/New_York',   label: 'New York',  abbr: 'EST'  },
-  { id: 'America/Los_Angeles',label: 'Los Angeles',abbr: 'PST' },
+  { id: 'Europe/Oslo',        label: 'Oslo',      abbr: 'CET/CEST' },
+  { id: 'America/New_York',   label: 'New York',  abbr: 'ET'   },
+  { id: 'America/Los_Angeles',label: 'Los Angeles',abbr: 'PT'  },
   { id: 'Asia/Tokyo',         label: 'Tokyo',     abbr: 'JST'  },
 ];
 

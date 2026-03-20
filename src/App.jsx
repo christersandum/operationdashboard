@@ -62,7 +62,7 @@ export default function App() {
   const [isPlaying,      setIsPlaying]      = useState(true);
   const [playbackSpeed,  setPlaybackSpeed]  = useState(1);
   const [scenarioProgress, setScenarioProgress] = useState(0);
-  const SCENARIO_TOTAL_MS = 170000; // total ms for full scenario
+  const SCENARIO_TOTAL_MS = 205000; // 140s last incident + ~65s for arrival msgs + bank chat
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);

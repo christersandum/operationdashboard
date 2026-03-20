@@ -13,6 +13,10 @@ import TextSymbol from '@arcgis/core/symbols/TextSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import { LIGHT_BASEMAP_URL, DARK_BASEMAP_URL, INCIDENT_COLORS } from '../data';
 
+// Mission marker positioning: offset from incident so markers don't overlap
+const MISSION_MARKER_OFFSET = 0.001; // ~100m in degrees
+const MISSION_GRID_COLS     = 3;      // arrange markers in 3-column grid
+
 export default function ArcGISMap({
   center,
   zoom,
@@ -212,8 +216,8 @@ export default function ArcGISMap({
       const inc = incidents.find(i => i.id === mission.incidentId);
       if (!inc) return;
 
-      const offsetLat = inc.lat + 0.001 * (idx % 3 - 1);
-      const offsetLng = inc.lng + 0.001 * Math.floor(idx / 3);
+      const offsetLat = inc.lat + MISSION_MARKER_OFFSET * (idx % MISSION_GRID_COLS - 1);
+      const offsetLng = inc.lng + MISSION_MARKER_OFFSET * Math.floor(idx / MISSION_GRID_COLS);
 
       const pt = new Point({ longitude: offsetLng, latitude: offsetLat, spatialReference: { wkid: 4326 } });
       const completed = mission.status === 'completed';

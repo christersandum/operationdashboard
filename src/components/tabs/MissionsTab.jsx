@@ -52,7 +52,7 @@ export default function MissionsTab({ missions, units, incidents }) {
                     )}
                   </div>
                   <div className="mission-status-label" style={{ color: completed ? '#2ecc71' : '#e74c3c' }}>
-                    {completed ? 'Fullført' : 'Aktiv'}
+                    {completed ? 'FULLFØRT' : 'AKTIV'}
                   </div>
                 </div>
               );
