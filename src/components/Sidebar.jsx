@@ -4,6 +4,7 @@ import UnitsTab from './tabs/UnitsTab';
 import IncidentsTab from './tabs/IncidentsTab';
 import MissionsTab from './tabs/MissionsTab';
 import ChatTab from './tabs/ChatTab';
+import SymbolLibraryTab from './tabs/SymbolLibraryTab';
 
 export default function Sidebar({
   opConfig,
@@ -35,6 +36,7 @@ export default function Sidebar({
     { id: 'incidents',     label: 'Hendelser', badge: unreadIncidents > 0 ? unreadIncidents : null },
     { id: 'missions',      label: 'Oppdrag',   badge: openMissions > 0 ? openMissions : null },
     { id: 'chat',          label: 'Chat',      badge: unreadChat > 0 ? unreadChat : null },
+    { id: 'symbols',       label: 'Symboler',  badge: null },
   ];
 
   return (
@@ -69,6 +71,9 @@ export default function Sidebar({
       </div>
       <div className={`tab-content${activeTab === 'chat' ? ' active' : ''}`} id="tab-chat">
         <ChatTab messages={chatHistory} onSend={onSendMessage} />
+      </div>
+      <div className={`tab-content${activeTab === 'symbols' ? ' active' : ''}`} id="tab-symbols">
+        <SymbolLibraryTab />
       </div>
     </aside>
   );
@@ -111,6 +116,12 @@ function TabIcon({ id }) {
       return (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      );
+    case 'symbols':
+      return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
         </svg>
       );
     default:

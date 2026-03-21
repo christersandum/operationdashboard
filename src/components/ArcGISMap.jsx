@@ -29,9 +29,12 @@ export default function ArcGISMap({
   onViewReady,
   onCoordMove,
   onZoomChange,
+  drawAOMode,
+  onMapClick,
 }) {
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
+  const drawAOModeRef = useRef(drawAOMode);
   const mapRef      = useRef(null);
   const darkLayerRef  = useRef(null);
   const lightLayerRef = useRef(null);
@@ -81,6 +84,11 @@ export default function ArcGISMap({
       if (pt && onCoordMove) onCoordMove(pt.latitude, pt.longitude);
     });
 
+    view.on('click', (evt) => {
+      const pt = view.toMap({ x: evt.x, y: evt.y });
+      if (pt && onMapClick) onMapClick(pt.latitude, pt.longitude);
+    });
+
     view.watch('zoom', (z) => {
       if (onZoomChange) onZoomChange(Math.round(z));
     });
@@ -94,6 +102,11 @@ export default function ArcGISMap({
       viewRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync drawAOMode ref ────────────────────────────────────
+  useEffect(() => {
+    drawAOModeRef.current = drawAOMode;
+  }, [drawAOMode]);
 
   // ── Basemap switch ─────────────────────────────────────────
   useEffect(() => {

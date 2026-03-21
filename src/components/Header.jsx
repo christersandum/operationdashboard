@@ -13,6 +13,9 @@ export default function Header({
   onOperationChange,
   onBroadcast,
   scenarioEnded,
+  onSaveOperation,
+  onLoadOperation,
+  onNewOperation,
   onSettingsChange,
   timingConfig,
 }) {
@@ -30,6 +33,7 @@ export default function Header({
     interval: 30,
     travelTime: 35,
     bankChatDuration: 30,
+    alertInterval: 10,
   };
   const [settings, setSettings] = useState({ ...defaultSettings, ...(timingConfig || {}) });
 
@@ -167,6 +171,28 @@ export default function Header({
         Kringkast
       </button>
 
+      <button className="header-btn" title="Lagre operasjon" onClick={onSaveOperation}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        Lagre
+      </button>
+      <label className="header-btn" title="Last inn operasjon" style={{ cursor: 'pointer' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        Last inn
+        <input type="file" accept=".json" style={{ display: 'none' }} onChange={onLoadOperation} />
+      </label>
+      <button className="header-btn" title="Ny operasjon" onClick={onNewOperation}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Ny
+      </button>
+
       {/* Settings button */}
       <div className="settings-wrap" ref={settingsRef}>
         <button className="header-btn" title="Innstillinger" onClick={() => setSettingsOpen(v => !v)}>
@@ -198,6 +224,11 @@ export default function Header({
               <label>Bankran chat-varighet (sek)</label>
               <input type="number" value={settings.bankChatDuration} min="1"
                 onChange={e => setSettings(s => ({ ...s, bankChatDuration: Number(e.target.value) }))} />
+            </div>
+            <div className="settings-row">
+              <label>Varslingsintervall (sek)</label>
+              <input type="number" value={settings.alertInterval ?? defaultSettings.alertInterval} min="1"
+                onChange={e => setSettings(s => ({ ...s, alertInterval: Number(e.target.value) }))} />
             </div>
             <button className="header-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} onClick={applySettings}>
               Bruk innstillinger
