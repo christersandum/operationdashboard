@@ -3,6 +3,7 @@ import './App.css';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ArcGISMap from './components/ArcGISMap';
+import RightPanel from './components/RightPanel';
 import {
   OPERATION_CONFIG,
   INCIDENTS_SWORD_STAGED,
@@ -64,6 +65,12 @@ export default function App() {
   const [scenarioProgress, setScenarioProgress] = useState(0);
   const SCENARIO_TOTAL_MS = 205000; // 140s last incident + ~65s for arrival msgs + bank chat
 
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [drawAOMode, setDrawAOMode] = useState(false);
+  const [aoFirstPoint, setAoFirstPoint] = useState(null);
+  const [alertInterval, setAlertInterval] = useState(10);
+  const [currentAoCoords, setCurrentAoCoords] = useState(null);
+
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
   const progressInterval = useRef(null);
@@ -77,6 +84,9 @@ export default function App() {
   const arrivedRef   = useRef(new Set());
   const isPlayingRef = useRef(true);
   const playbackSpeedRef = useRef(1);
+
+
+  const opConfig = OPERATION_CONFIG[currentOpId];
 
   const loadOperation = useCallback((opId) => {
     simTimers.current.forEach(clearTimeout);
@@ -425,7 +435,217 @@ export default function App() {
     setBasemap(b => b === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const opConfig = OPERATION_CONFIG[currentOpId];
+  const handleAddUnit = useCallback((unitData) => {
+    const newUnit = { ...unitData, target: null, assignedIncident: null, incidentColorIndex: null, signal: 4 };
+    unitsRef.current = [...unitsRef.current, newUnit];
+    setUnits([...unitsRef.current]);
+  }, []);
+
+  const handleEditUnit = useCallback((unitId, changes) => {
+    unitsRef.current = unitsRef.current.map(u => u.id === unitId ? { ...u, ...changes } : u);
+    setUnits([...unitsRef.current]);
+  }, []);
+
+  const handleDeleteUnit = useCallback((unitId) => {
+    unitsRef.current = unitsRef.current.filter(u => u.id !== unitId);
+    setUnits([...unitsRef.current]);
+  }, []);
+
+  const handleAddIncident = useCallback((incData) => {
+    const newInc = { ...incData, time: nowTime(), colorIndex: incidentsRef.current.length % 4 };
+    incidentsRef.current = [...incidentsRef.current, newInc];
+    setIncidents([...incidentsRef.current]);
+    setStats(prev => ({ ...prev, incidents: incidentsRef.current.length }));
+  }, []);
+
+  const handleEditIncident = useCallback((incId, changes) => {
+    incidentsRef.current = incidentsRef.current.map(i => i.id === incId ? { ...i, ...changes } : i);
+    setIncidents([...incidentsRef.current]);
+  }, []);
+
+  const handleDeleteIncident = useCallback((incId) => {
+    incidentsRef.current = incidentsRef.current.filter(i => i.id !== incId);
+    setIncidents([...incidentsRef.current]);
+    setStats(prev => ({ ...prev, incidents: incidentsRef.current.length }));
+  }, []);
+
+  // Shared helper: dispatch a set of unit IDs to an incident location
+  function dispatchUnitsToIncident(unitIds, inc) {
+    unitsRef.current = unitsRef.current.map(u => {
+      if (unitIds.includes(u.id)) {
+        return { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 };
+      }
+      return u;
+    });
+    setUnits([...unitsRef.current]);
+  }
+
+  const handleAddMission = useCallback((missionData) => {
+    const newMission = { ...missionData, assignedUnitIds: missionData.assignedUnitIds || [] };
+    const inc = incidentsRef.current.find(i => i.id === missionData.incidentId);
+    if (inc && newMission.assignedUnitIds.length > 0) {
+      dispatchUnitsToIncident(newMission.assignedUnitIds, inc);
+    }
+    missionsRef.current = [...missionsRef.current, newMission];
+    setMissions([...missionsRef.current]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleEditMission = useCallback((missionId, changes) => {
+    const oldMission = missionsRef.current.find(m => m.id === missionId);
+    const newAssigned = changes.assignedUnitIds || oldMission?.assignedUnitIds || [];
+    const oldAssigned = oldMission?.assignedUnitIds || [];
+    const newlyAssigned = newAssigned.filter(id => !oldAssigned.includes(id));
+    if (newlyAssigned.length > 0) {
+      const inc = incidentsRef.current.find(i => i.id === (changes.incidentId || oldMission?.incidentId));
+      if (inc) dispatchUnitsToIncident(newlyAssigned, inc);
+    }
+    missionsRef.current = missionsRef.current.map(m => m.id === missionId ? { ...m, ...changes } : m);
+    setMissions([...missionsRef.current]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteMission = useCallback((missionId) => {
+    missionsRef.current = missionsRef.current.filter(m => m.id !== missionId);
+    setMissions([...missionsRef.current]);
+  }, []);
+
+  const handleAutoAssign = useCallback(() => {
+    const unassigned = missionsRef.current.filter(m => (!m.assignedUnitIds || m.assignedUnitIds.length === 0) && m.status !== 'completed');
+    let changed = false;
+    unassigned.forEach(mission => {
+      const inc = incidentsRef.current.find(i => i.id === mission.incidentId);
+      if (!inc) return;
+      const free = unitsRef.current.filter(u => !u.assignedIncident && u.status !== 'offline');
+      if (free.length === 0) return;
+      const closest = free.map(u => ({ unit: u, dist: calcDist(u, inc) })).sort((a, b) => a.dist - b.dist)[0];
+      if (!closest) return;
+      const uid = closest.unit.id;
+      // Update unit inline (dispatchUnitsToIncident also calls setUnits, but here we batch)
+      unitsRef.current = unitsRef.current.map(u => u.id === uid ? { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 } : u);
+      missionsRef.current = missionsRef.current.map(m => m.id === mission.id ? { ...m, assignedUnitIds: [uid] } : m);
+      changed = true;
+    });
+    if (changed) {
+      setUnits([...unitsRef.current]);
+      setMissions([...missionsRef.current]);
+      addSystemChat('⚡ Auto-tildeling fullført — nærmeste enheter er utsendt.', '#0078d4');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSaveOperation = useCallback(() => {
+    const cfg = OPERATION_CONFIG[currentOpId];
+    const opData = {
+      id: currentOpId,
+      name: cfg.name,
+      center: cfg.center,
+      zoom: cfg.zoom,
+      aoCoords: currentAoCoords || cfg.aoCoords,
+      aoLabel: cfg.aoLabel,
+      units: unitsRef.current,
+      incidents: incidentsRef.current,
+      missions: missionsRef.current,
+      staged: false,
+      stats: stats,
+      alerts: cfg.alerts,
+      commander: cfg.commander,
+      aoCenter: cfg.aoCenter,
+      progress: cfg.progress || 0,
+      elapsed: cfg.elapsed || 0,
+      chat: chatHistory,
+    };
+    const json = JSON.stringify(opData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `operasjon-${currentOpId}-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [currentOpId, stats, chatHistory, currentAoCoords]);
+
+  const handleLoadOperation = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const opData = JSON.parse(ev.target.result);
+        simTimers.current.forEach(clearTimeout);
+        simTimers.current = [];
+        if (moveInterval.current) clearInterval(moveInterval.current);
+        if (progressInterval.current) clearInterval(progressInterval.current);
+        const freshUnits = (opData.units || []).map(u => ({ ...u, target: null, signal: u.signal ?? 4 }));
+        unitsRef.current = freshUnits;
+        setUnits([...freshUnits]);
+        const freshIncidents = opData.incidents || [];
+        incidentsRef.current = freshIncidents;
+        setIncidents([...freshIncidents]);
+        const freshMissions = opData.missions || [];
+        missionsRef.current = freshMissions;
+        setMissions([...freshMissions]);
+        arrivedRef.current = new Set();
+        const freshChat = (opData.chat || []).map((m, i) => ({ ...m, id: i }));
+        chatIdRef.current = freshChat.length + 1;
+        setChatHistory([...freshChat]);
+        if (opData.stats) setStats(opData.stats);
+        if (opData.center) { setMapCenter(opData.center); setMapZoom(opData.zoom || 12); }
+        if (opData.aoCoords) setCurrentAoCoords(opData.aoCoords);
+        setScenarioEnded(false);
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+        moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+        addSystemChat(`📂 Operasjon lastet fra fil: ${file.name}`, '#2ecc71');
+      } catch (err) {
+        console.error('Failed to load operation:', err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreateNewOperation = useCallback(() => {
+    simTimers.current.forEach(clearTimeout);
+    simTimers.current = [];
+    if (moveInterval.current) clearInterval(moveInterval.current);
+    const newUnits = [];
+    const newIncidents = [];
+    const newMissions = [];
+    unitsRef.current = newUnits;
+    incidentsRef.current = newIncidents;
+    missionsRef.current = newMissions;
+    arrivedRef.current = new Set();
+    setUnits([]);
+    setIncidents([]);
+    setMissions([]);
+    chatIdRef.current = 2;
+    setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: 'Ny operasjon opprettet. Legg til enheter og hendelser.' }]);
+    setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
+    setScenarioEnded(false);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleMapClick = useCallback((lat, lng) => {
+    if (!drawAOMode) return;
+    if (!aoFirstPoint) {
+      setAoFirstPoint({ lat, lng });
+    } else {
+      const p1 = aoFirstPoint;
+      const p2 = { lat, lng };
+      const minLat = Math.min(p1.lat, p2.lat);
+      const maxLat = Math.max(p1.lat, p2.lat);
+      const minLng = Math.min(p1.lng, p2.lng);
+      const maxLng = Math.max(p1.lng, p2.lng);
+      // Clockwise rectangle: top-left, top-right, bottom-right, bottom-left, close
+      const rect = [[minLng, maxLat], [maxLng, maxLat], [maxLng, minLat], [minLng, minLat], [minLng, maxLat]];
+      setCurrentAoCoords(rect);
+      setDrawAOMode(false);
+      setAoFirstPoint(null);
+      addSystemChat('🗺 AO rektangel tegnet og oppdatert.', '#0078d4');
+    }
+  }, [drawAOMode, aoFirstPoint]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -434,6 +654,13 @@ export default function App() {
         onOperationChange={handleOperationChange}
         onBroadcast={handleBroadcast}
         scenarioEnded={scenarioEnded}
+        onSaveOperation={handleSaveOperation}
+        onLoadOperation={handleLoadOperation}
+        onNewOperation={handleCreateNewOperation}
+        onSettingsChange={(s) => {
+          if (s.alertInterval !== undefined) setAlertInterval(s.alertInterval);
+        }}
+        timingConfig={{ alertInterval }}
       />
 
       <div className="main-layout">
@@ -462,10 +689,12 @@ export default function App() {
             units={unitsVisible ? units : []}
             incidents={incidentsVisible ? incidents : []}
             missions={missionsVisible ? missions : []}
-            aoCoords={opConfig.aoCoords}
+            aoCoords={currentAoCoords || opConfig.aoCoords}
             aoLabel={opConfig.aoLabel}
             onCoordMove={(lat, lng) => setMapCoords({ lat, lng })}
             onZoomChange={setCurrentZoom}
+            drawAOMode={drawAOMode}
+            onMapClick={handleMapClick}
           />
 
           {/* Toolbar */}
@@ -501,6 +730,17 @@ export default function App() {
                 <polyline points="2 12 12 17 22 12"/>
               </svg>
               Kartlag
+            </button>
+
+            <button
+              className={`map-toolbar-btn${drawAOMode ? ' active' : ''}`}
+              onClick={() => { setDrawAOMode(v => !v); setAoFirstPoint(null); }}
+              title="Tegn AO som rektangel (klikk to hjørner)"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="0"/>
+              </svg>
+              {drawAOMode ? (aoFirstPoint ? 'Klikk 2. hjørne' : 'Klikk 1. hjørne') : 'Tegn AO'}
             </button>
           </div>
 
@@ -577,11 +817,7 @@ export default function App() {
           {/* Time Player */}
           {opConfig.staged && (
             <div className="time-player">
-              <button
-                className="time-player-btn"
-                onClick={handlePlayPause}
-                title={isPlaying ? 'Pause' : 'Spill av'}
-              >
+              <button className="time-player-btn" onClick={handlePlayPause} title={isPlaying ? 'Pause' : 'Spill av'}>
                 {isPlaying ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                     <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
@@ -603,20 +839,27 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <div className="time-player-progress-wrap">
-                <div className="time-player-progress-bar">
-                  <div
-                    className="time-player-progress-fill"
-                    style={{ width: `${scenarioProgress}%`, background: scenarioEnded ? '#e74c3c' : '#0078d4' }}
-                  />
-                </div>
-                <span className="time-player-pct">
-                  {scenarioEnded ? '✓ Ferdig' : `${scenarioProgress}%`}
-                </span>
-              </div>
             </div>
           )}
         </div>
+
+        <RightPanel
+          open={rightPanelOpen}
+          onToggle={() => setRightPanelOpen(v => !v)}
+          units={units}
+          incidents={incidents}
+          missions={missions}
+          onAddUnit={handleAddUnit}
+          onEditUnit={handleEditUnit}
+          onDeleteUnit={handleDeleteUnit}
+          onAddIncident={handleAddIncident}
+          onEditIncident={handleEditIncident}
+          onDeleteIncident={handleDeleteIncident}
+          onAddMission={handleAddMission}
+          onEditMission={handleEditMission}
+          onDeleteMission={handleDeleteMission}
+          onAutoAssign={handleAutoAssign}
+        />
       </div>
 
       {/* Broadcast modal */}
