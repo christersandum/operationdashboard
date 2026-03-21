@@ -16,6 +16,7 @@ export default function Header({
   onSaveOperation,
   onLoadOperation,
   onNewOperation,
+  onDeleteOperation,
   onSettingsChange,
   timingConfig,
 }) {
@@ -192,6 +193,16 @@ export default function Header({
         </svg>
         Ny
       </button>
+      {onDeleteOperation && (
+        <button className="header-btn" title="Slett/nullstill operasjon" onClick={onDeleteOperation}
+          style={{ color: 'var(--accent-red)', borderColor: 'rgba(231,76,60,0.3)' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+          Slett
+        </button>
+      )}
 
       {/* Settings button */}
       <div className="settings-wrap" ref={settingsRef}>

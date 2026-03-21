@@ -72,6 +72,7 @@ export default function App() {
   const [currentAoCoords, setCurrentAoCoords] = useState(null);
   const [newOpDialogOpen, setNewOpDialogOpen] = useState(false);
   const [newOpTemplateId, setNewOpTemplateId] = useState('');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
@@ -364,9 +365,8 @@ export default function App() {
     if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
     alertIntervalRef.current = setInterval(() => {
       if (!isPlayingRef.current) return;
-      setStats(prev => ({ ...prev, alerts: prev.alerts + 1 }));
       const messages = [
-        '⚠ Automatisk statussjekk — alle enheter rapporter inn.',
+        '⚠ Automatisk statussjekk — alle enheter rapporterer inn.',
         '📡 Signaloppdatering mottatt fra feltstyrker.',
         '🔔 Periodisk varsel: kontroller oppdragsstatus.',
         '⚡ Ressursgjennomgang: vurder omtildeling av ledige enheter.',
@@ -374,6 +374,7 @@ export default function App() {
       ];
       const text = messages[Math.floor(Math.random() * messages.length)];
       addChat({ sender: 'System', initials: '⚙', color: '#f39c12', system: true, text });
+      setStats(prev => ({ ...prev, alerts: prev.alerts + 1 }));
     }, intervalSec * 1000);
   }
 
@@ -704,6 +705,29 @@ export default function App() {
     }
   }, [drawAOMode, aoFirstPoint]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const confirmDeleteOperation = useCallback(() => {
+    setDeleteConfirmOpen(false);
+    simTimers.current.forEach(clearTimeout);
+    simTimers.current = [];
+    if (moveInterval.current) clearInterval(moveInterval.current);
+    if (progressInterval.current) clearInterval(progressInterval.current);
+    unitsRef.current = [];
+    incidentsRef.current = [];
+    missionsRef.current = [];
+    arrivedRef.current = new Set();
+    setUnits([]);
+    setIncidents([]);
+    setMissions([]);
+    setCurrentAoCoords(null);
+    chatIdRef.current = 2;
+    setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#e74c3c', system: true, self: false, time: nowTime(), text: '🗑 Operasjon slettet/nullstilt. All data er fjernet.' }]);
+    setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
+    setScenarioEnded(false);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <Header
@@ -714,6 +738,7 @@ export default function App() {
         onSaveOperation={handleSaveOperation}
         onLoadOperation={handleLoadOperation}
         onNewOperation={() => setNewOpDialogOpen(true)}
+        onDeleteOperation={() => setDeleteConfirmOpen(true)}
         onSettingsChange={(s) => {
           if (s.alertInterval !== undefined) {
             setAlertInterval(s.alertInterval);
@@ -988,6 +1013,28 @@ export default function App() {
             </div>
             <div style={{ marginTop: '8px' }}>
               <button className="header-btn" onClick={() => setNewOpDialogOpen(false)}>Avbryt</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirmOpen && (
+        <div className="modal-backdrop" onClick={() => setDeleteConfirmOpen(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title" style={{ color: 'var(--accent-red)' }}>🗑 Slett operasjon</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
+              Er du sikker på at du vil slette/nullstille gjeldende operasjon? All data (enheter, hendelser, oppdrag og AO) vil gå tapt.
+            </p>
+            <div className="modal-actions">
+              <button className="header-btn" onClick={() => setDeleteConfirmOpen(false)}>Avbryt</button>
+              <button
+                className="header-btn"
+                style={{ background: 'rgba(231,76,60,0.15)', color: 'var(--accent-red)', borderColor: 'rgba(231,76,60,0.4)' }}
+                onClick={confirmDeleteOperation}
+              >
+                🗑 Slett permanent
+              </button>
             </div>
           </div>
         </div>
