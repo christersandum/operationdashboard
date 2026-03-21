@@ -167,8 +167,8 @@ export default function RightPanel({
                         <span className="rp-item-sub">{u.role} · {u.status}</span>
                       </div>
                       <div className="rp-item-actions">
-                        <button className="rp-icon-btn" title="Rediger" onClick={() => openEditUnit(u)}>✏</button>
-                        <button className="rp-icon-btn danger" title="Slett" onClick={() => onDeleteUnit(u.id)}>🗑</button>
+                        <button className="rp-icon-btn" title="Rediger" aria-label={`Rediger enhet ${u.name}`} onClick={() => openEditUnit(u)}>✏</button>
+                        <button className="rp-icon-btn danger" title="Slett" aria-label={`Slett enhet ${u.name}`} onClick={() => onDeleteUnit(u.id)}>🗑</button>
                       </div>
                     </div>
                   ))}
@@ -212,8 +212,8 @@ export default function RightPanel({
                         <span className="rp-item-sub">{inc.priority}</span>
                       </div>
                       <div className="rp-item-actions">
-                        <button className="rp-icon-btn" title="Rediger" onClick={() => openEditIncident(inc)}>✏</button>
-                        <button className="rp-icon-btn danger" title="Slett" onClick={() => onDeleteIncident(inc.id)}>🗑</button>
+                        <button className="rp-icon-btn" title="Rediger" aria-label={`Rediger hendelse ${inc.title}`} onClick={() => openEditIncident(inc)}>✏</button>
+                        <button className="rp-icon-btn danger" title="Slett" aria-label={`Slett hendelse ${inc.title}`} onClick={() => onDeleteIncident(inc.id)}>🗑</button>
                       </div>
                     </div>
                   ))}
@@ -273,8 +273,8 @@ export default function RightPanel({
                           </span>
                         </div>
                         <div className="rp-item-actions">
-                          <button className="rp-icon-btn" title="Rediger" onClick={() => openEditMission(m)}>✏</button>
-                          <button className="rp-icon-btn danger" title="Slett" onClick={() => onDeleteMission(m.id)}>🗑</button>
+                          <button className="rp-icon-btn" title="Rediger" aria-label={`Rediger oppdrag ${m.title}`} onClick={() => openEditMission(m)}>✏</button>
+                          <button className="rp-icon-btn danger" title="Slett" aria-label={`Slett oppdrag ${m.title}`} onClick={() => onDeleteMission(m.id)}>🗑</button>
                         </div>
                       </div>
                     );

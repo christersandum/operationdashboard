@@ -469,21 +469,26 @@ export default function App() {
     setStats(prev => ({ ...prev, incidents: incidentsRef.current.length }));
   }, []);
 
+  // Shared helper: dispatch a set of unit IDs to an incident location
+  function dispatchUnitsToIncident(unitIds, inc) {
+    unitsRef.current = unitsRef.current.map(u => {
+      if (unitIds.includes(u.id)) {
+        return { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 };
+      }
+      return u;
+    });
+    setUnits([...unitsRef.current]);
+  }
+
   const handleAddMission = useCallback((missionData) => {
     const newMission = { ...missionData, assignedUnitIds: missionData.assignedUnitIds || [] };
     const inc = incidentsRef.current.find(i => i.id === missionData.incidentId);
     if (inc && newMission.assignedUnitIds.length > 0) {
-      unitsRef.current = unitsRef.current.map(u => {
-        if (newMission.assignedUnitIds.includes(u.id)) {
-          return { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 };
-        }
-        return u;
-      });
-      setUnits([...unitsRef.current]);
+      dispatchUnitsToIncident(newMission.assignedUnitIds, inc);
     }
     missionsRef.current = [...missionsRef.current, newMission];
     setMissions([...missionsRef.current]);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEditMission = useCallback((missionId, changes) => {
     const oldMission = missionsRef.current.find(m => m.id === missionId);
@@ -492,19 +497,11 @@ export default function App() {
     const newlyAssigned = newAssigned.filter(id => !oldAssigned.includes(id));
     if (newlyAssigned.length > 0) {
       const inc = incidentsRef.current.find(i => i.id === (changes.incidentId || oldMission?.incidentId));
-      if (inc) {
-        unitsRef.current = unitsRef.current.map(u => {
-          if (newlyAssigned.includes(u.id)) {
-            return { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 };
-          }
-          return u;
-        });
-        setUnits([...unitsRef.current]);
-      }
+      if (inc) dispatchUnitsToIncident(newlyAssigned, inc);
     }
     missionsRef.current = missionsRef.current.map(m => m.id === missionId ? { ...m, ...changes } : m);
     setMissions([...missionsRef.current]);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteMission = useCallback((missionId) => {
     missionsRef.current = missionsRef.current.filter(m => m.id !== missionId);
@@ -522,6 +519,7 @@ export default function App() {
       const closest = free.map(u => ({ unit: u, dist: calcDist(u, inc) })).sort((a, b) => a.dist - b.dist)[0];
       if (!closest) return;
       const uid = closest.unit.id;
+      // Update unit inline (dispatchUnitsToIncident also calls setUnits, but here we batch)
       unitsRef.current = unitsRef.current.map(u => u.id === uid ? { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 } : u);
       missionsRef.current = missionsRef.current.map(m => m.id === mission.id ? { ...m, assignedUnitIds: [uid] } : m);
       changed = true;
