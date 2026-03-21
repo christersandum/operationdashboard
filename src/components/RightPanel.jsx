@@ -100,6 +100,7 @@ export default function RightPanel({
 
   return (
     <div className={`right-panel${open ? ' open' : ''}`}>
+      {/* Toggle tab - always in flow so map never overlaps */}
       <button className="right-panel-toggle" onClick={onToggle} title={open ? 'Skjul panel' : 'Åpne panel'}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           {open
@@ -109,8 +110,7 @@ export default function RightPanel({
         {!open && <span className="right-panel-toggle-label">Rediger</span>}
       </button>
 
-      {open && (
-        <div className="right-panel-content">
+      <div className="right-panel-content" style={{ display: open ? 'flex' : 'none' }}>
           <div className="right-panel-header">
             <span>Rediger operasjon</span>
           </div>
@@ -284,7 +284,6 @@ export default function RightPanel({
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }

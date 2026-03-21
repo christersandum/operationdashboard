@@ -1317,32 +1317,26 @@ arcgis-map {
 
 /* ─── Right Panel ──────────────────────────────────────────────── */
 .right-panel {
-  position: relative;
-  width: 0;
-  min-width: 0;
-  background: var(--panel-bg);
-  border-left: 1px solid var(--border-color);
-  transition: width 0.3s ease, min-width 0.3s ease;
-  overflow: hidden;
   display: flex;
   flex-direction: row;
   flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border-color);
+  transition: width 0.3s ease;
+  overflow: hidden;
+  /* Always at least 28px wide for the toggle tab */
+  width: 28px;
 }
 .right-panel.open {
-  width: 340px;
-  min-width: 340px;
+  width: 368px; /* 28px toggle + 340px content */
 }
 .right-panel-toggle {
-  position: absolute;
-  left: -32px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 80px;
-  background: var(--panel-bg);
-  border: 1px solid var(--border-color);
-  border-right: none;
-  border-radius: 6px 0 0 6px;
+  width: 28px;
+  min-width: 28px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border: none;
+  border-right: 1px solid var(--border-color);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -1350,12 +1344,12 @@ arcgis-map {
   justify-content: center;
   gap: 4px;
   color: var(--text-muted);
-  z-index: 10;
   transition: color 0.2s, background 0.2s;
+  padding: 0;
 }
 .right-panel-toggle:hover {
   color: var(--text-primary);
-  background: var(--hover-bg);
+  background: var(--bg-hover);
 }
 .right-panel-toggle-label {
   font-size: 9px;
@@ -1369,6 +1363,7 @@ arcgis-map {
   display: flex;
   flex-direction: column;
   width: 340px;
+  min-width: 340px;
   height: 100%;
   overflow: hidden;
 }
