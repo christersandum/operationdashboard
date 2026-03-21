@@ -70,10 +70,13 @@ export default function App() {
   const [aoFirstPoint, setAoFirstPoint] = useState(null);
   const [alertInterval, setAlertInterval] = useState(10);
   const [currentAoCoords, setCurrentAoCoords] = useState(null);
+  const [newOpDialogOpen, setNewOpDialogOpen] = useState(false);
+  const [newOpTemplateId, setNewOpTemplateId] = useState('');
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
   const progressInterval = useRef(null);
+  const alertIntervalRef = useRef(null);
   const simStartRef  = useRef(null);
   const viewRef      = useRef(null);
   const unitsRef     = useRef([]);
@@ -84,6 +87,7 @@ export default function App() {
   const arrivedRef   = useRef(new Set());
   const isPlayingRef = useRef(true);
   const playbackSpeedRef = useRef(1);
+  const alertIntervalSecRef = useRef(10);
 
 
   const opConfig = OPERATION_CONFIG[currentOpId];
@@ -356,12 +360,31 @@ export default function App() {
     }
   }
 
+  function startAlertInterval(intervalSec) {
+    if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
+    alertIntervalRef.current = setInterval(() => {
+      if (!isPlayingRef.current) return;
+      setStats(prev => ({ ...prev, alerts: prev.alerts + 1 }));
+      const messages = [
+        '⚠ Automatisk statussjekk — alle enheter rapporter inn.',
+        '📡 Signaloppdatering mottatt fra feltstyrker.',
+        '🔔 Periodisk varsel: kontroller oppdragsstatus.',
+        '⚡ Ressursgjennomgang: vurder omtildeling av ledige enheter.',
+        '📋 Oppdragslogg oppdatert — se operasjonsoversikten.',
+      ];
+      const text = messages[Math.floor(Math.random() * messages.length)];
+      addChat({ sender: 'System', initials: '⚙', color: '#f39c12', system: true, text });
+    }, intervalSec * 1000);
+  }
+
   useEffect(() => {
     loadOperation('norwegian-sword');
+    startAlertInterval(10);
     return () => {
       simTimers.current.forEach(clearTimeout);
       if (moveInterval.current) clearInterval(moveInterval.current);
       if (progressInterval.current) clearInterval(progressInterval.current);
+      if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -627,6 +650,40 @@ export default function App() {
     moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleCreateFromTemplate = useCallback((templateOpId) => {
+    const op = OPERATION_CONFIG[templateOpId];
+    if (!op) return;
+    simTimers.current.forEach(clearTimeout);
+    simTimers.current = [];
+    if (moveInterval.current) clearInterval(moveInterval.current);
+    if (progressInterval.current) clearInterval(progressInterval.current);
+    // Copy units and incidents from template (non-staged version)
+    const freshUnits = op.units.map(u => ({
+      ...u,
+      target: null,
+      assignedIncident: null,
+      incidentColorIndex: null,
+      signal: u.signal ?? 4,
+    }));
+    const freshIncidents = op.incidents ? op.incidents.map(i => ({ ...i })) : [];
+    unitsRef.current = freshUnits;
+    incidentsRef.current = freshIncidents;
+    missionsRef.current = [];
+    arrivedRef.current = new Set();
+    setUnits([...freshUnits]);
+    setIncidents([...freshIncidents]);
+    setMissions([]);
+    chatIdRef.current = 2;
+    setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#2ecc71', system: true, self: false, time: nowTime(), text: `Ny operasjon opprettet fra mal: ${op.name}. Enheter og hendelser er kopiert.` }]);
+    setStats({ units: freshUnits.length, incidents: freshIncidents.length, tasks: 0, alerts: 0 });
+    if (op.center) { setMapCenter([...op.center]); setMapZoom(op.zoom || 12); }
+    if (op.aoCoords) setCurrentAoCoords(op.aoCoords);
+    setScenarioEnded(false);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleMapClick = useCallback((lat, lng) => {
     if (!drawAOMode) return;
     if (!aoFirstPoint) {
@@ -656,9 +713,13 @@ export default function App() {
         scenarioEnded={scenarioEnded}
         onSaveOperation={handleSaveOperation}
         onLoadOperation={handleLoadOperation}
-        onNewOperation={handleCreateNewOperation}
+        onNewOperation={() => setNewOpDialogOpen(true)}
         onSettingsChange={(s) => {
-          if (s.alertInterval !== undefined) setAlertInterval(s.alertInterval);
+          if (s.alertInterval !== undefined) {
+            setAlertInterval(s.alertInterval);
+            alertIntervalSecRef.current = s.alertInterval;
+            startAlertInterval(s.alertInterval);
+          }
         }}
         timingConfig={{ alertInterval }}
       />
@@ -814,33 +875,31 @@ export default function App() {
             <span>{basemap === 'dark' ? 'Lyst kart' : 'Mørkt kart'}</span>
           </button>
 
-          {/* Time Player */}
-          {opConfig.staged && (
-            <div className="time-player">
-              <button className="time-player-btn" onClick={handlePlayPause} title={isPlaying ? 'Pause' : 'Spill av'}>
-                {isPlaying ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
-                )}
-              </button>
-              <div className="time-player-speeds">
-                {[1, 2, 4].map(s => (
-                  <button
-                    key={s}
-                    className={`time-player-speed-btn${playbackSpeed === s ? ' active' : ''}`}
-                    onClick={() => handleSpeedChange(s)}
-                  >
-                    {s}x
-                  </button>
-                ))}
-              </div>
+          {/* Time Player - always visible */}
+          <div className="time-player">
+            <button className="time-player-btn" onClick={handlePlayPause} title={isPlaying ? 'Pause' : 'Spill av'}>
+              {isPlaying ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+              )}
+            </button>
+            <div className="time-player-speeds">
+              {[1, 2, 4].map(s => (
+                <button
+                  key={s}
+                  className={`time-player-speed-btn${playbackSpeed === s ? ' active' : ''}`}
+                  onClick={() => handleSpeedChange(s)}
+                >
+                  {s}x
+                </button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
         <RightPanel
@@ -877,6 +936,58 @@ export default function App() {
             <div className="modal-actions">
               <button className="header-btn" onClick={() => setBroadcastOpen(false)}>Avbryt</button>
               <button className="header-btn primary" onClick={sendBroadcast}>Send til alle enheter</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Operation dialog */}
+      {newOpDialogOpen && (
+        <div className="modal-backdrop" onClick={() => setNewOpDialogOpen(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">➕ Ny operasjon</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
+              Velg om du vil opprette en tom operasjon eller bruke en eksisterende som mal.
+            </p>
+            <div className="modal-actions" style={{ flexDirection: 'column', gap: '8px' }}>
+              <button
+                className="header-btn primary"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => {
+                  setNewOpDialogOpen(false);
+                  handleCreateNewOperation();
+                }}
+              >
+                Tom operasjon
+              </button>
+              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                <select
+                  className="operation-select"
+                  style={{ flex: 1 }}
+                  value={newOpTemplateId}
+                  onChange={e => setNewOpTemplateId(e.target.value)}
+                >
+                  <option value="">-- Velg mal --</option>
+                  <option value="nordic-shield">Operation Nordic Shield</option>
+                  <option value="norwegian-sword">Operasjon Norwegian Sword</option>
+                </select>
+                <button
+                  className="header-btn"
+                  disabled={!newOpTemplateId}
+                  style={{ opacity: newOpTemplateId ? 1 : 0.5 }}
+                  onClick={() => {
+                    if (!newOpTemplateId) return;
+                    setNewOpDialogOpen(false);
+                    handleCreateFromTemplate(newOpTemplateId);
+                    setNewOpTemplateId('');
+                  }}
+                >
+                  Bruk som mal
+                </button>
+              </div>
+            </div>
+            <div style={{ marginTop: '8px' }}>
+              <button className="header-btn" onClick={() => setNewOpDialogOpen(false)}>Avbryt</button>
             </div>
           </div>
         </div>
