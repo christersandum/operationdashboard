@@ -1,6 +1,15 @@
-# Operation Dashboard
+# Operation Dashboard v1.1
 
 A real-time military/operations web dashboard inspired by ArcGIS Mission Manager.
+
+## What's New in v1.1
+
+- **Right Panel** — Collapsible CRUD panel for managing Units, Incidents, and Missions
+- **Operation Management** — Save/Load/New operation state as JSON files
+- **Symbol Library** — Filterable grid of 18 military/police tactical symbols
+- **AO Drawing** — Click two map corners to draw a rectangle Area of Operations polygon
+- **Auto-assign** — Automatically assigns the nearest free unit to unassigned missions
+- **Alert Interval setting** — Configurable notification interval (default 10 s)
 
 ## Features
 
