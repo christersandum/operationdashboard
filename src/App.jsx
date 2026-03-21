@@ -84,7 +84,7 @@ export default function App() {
   const arrivedRef   = useRef(new Set());
   const isPlayingRef = useRef(true);
   const playbackSpeedRef = useRef(1);
-  const alertIntervalRef = useRef(null);
+
 
   const opConfig = OPERATION_CONFIG[currentOpId];
 
@@ -620,6 +620,7 @@ export default function App() {
     setUnits([]);
     setIncidents([]);
     setMissions([]);
+    chatIdRef.current = 2;
     setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: 'Ny operasjon opprettet. Legg til enheter og hendelser.' }]);
     setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
     setScenarioEnded(false);
