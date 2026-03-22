@@ -1,4 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { wgs84ToUTM33N, utm33NToWGS84 } from '../utils/coordUtils';
+
+// ── Helper: format a WGS84 lat,lng as UTM33 strings for form inputs ──
+function latLngToUtmStrings(lat, lng) {
+  if (lat === '' || lng === '' || lat == null || lng == null) return { e: '', n: '' };
+  const parsed = { lat: parseFloat(lat), lng: parseFloat(lng) };
+  if (isNaN(parsed.lat) || isNaN(parsed.lng)) return { e: '', n: '' };
+  const utm = wgs84ToUTM33N(parsed.lat, parsed.lng);
+  return { e: String(utm.easting), n: String(utm.northing) };
+}
+
+// ── Helper: parse UTM33 strings to WGS84 lat,lng ──
+function utmStringsToLatLng(eStr, nStr) {
+  const e = parseFloat(eStr);
+  const n = parseFloat(nStr);
+  if (isNaN(e) || isNaN(n)) return { lat: 0, lng: 0 };
+  return utm33NToWGS84(e, n);
+}
 
 export default function RightPanel({
   open,
@@ -16,32 +34,61 @@ export default function RightPanel({
   onEditMission,
   onDeleteMission,
   onAutoAssign,
+  onRequestPickLocation,
+  pickedLocation,
 }) {
   const [activeTab, setActiveTab] = useState('units');
-  const [unitForm, setUnitForm] = useState({ id: '', name: '', role: '', status: 'online', lat: '', lng: '' });
+
+  // Unit form — stores UTM33 easting/northing as strings
+  const [unitForm, setUnitForm] = useState({ id: '', name: '', role: '', status: 'online', utmE: '', utmN: '' });
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [editUnitId, setEditUnitId] = useState(null);
-  
-  const [incidentForm, setIncidentForm] = useState({ id: '', title: '', desc: '', priority: 'medium', lat: '', lng: '', icon: '🚨' });
+
+  // Incident form
+  const [incidentForm, setIncidentForm] = useState({ id: '', title: '', desc: '', priority: 'medium', utmE: '', utmN: '', icon: '🚨' });
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [editIncidentId, setEditIncidentId] = useState(null);
-  
+
+  // Mission form (missions have no direct coordinates)
   const [missionForm, setMissionForm] = useState({ id: '', title: '', desc: '', incidentId: '', assignedUnitIds: [] });
   const [showMissionForm, setShowMissionForm] = useState(false);
   const [editMissionId, setEditMissionId] = useState(null);
 
+  // ── Apply picked location from map ────────────────────────
+  useEffect(() => {
+    if (!pickedLocation) return;
+    const utm = pickedLocation.utm || wgs84ToUTM33N(pickedLocation.lat, pickedLocation.lng);
+    const eStr = String(utm.easting);
+    const nStr = String(utm.northing);
+    if (pickedLocation.forForm === 'unit' && showUnitForm) {
+      setUnitForm(f => ({ ...f, utmE: eStr, utmN: nStr }));
+    } else if (pickedLocation.forForm === 'incident' && showIncidentForm) {
+      setIncidentForm(f => ({ ...f, utmE: eStr, utmN: nStr }));
+    }
+  }, [pickedLocation, showUnitForm, showIncidentForm]);
+
+  // ── Unit helpers ──────────────────────────────────────────
   const openAddUnit = () => {
-    setUnitForm({ id: '', name: '', role: '', status: 'online', lat: '', lng: '' });
+    setUnitForm({ id: '', name: '', role: '', status: 'online', utmE: '', utmN: '' });
     setEditUnitId(null);
     setShowUnitForm(true);
   };
   const openEditUnit = (unit) => {
-    setUnitForm({ id: unit.id, name: unit.name, role: unit.role, status: unit.status, lat: unit.lat, lng: unit.lng });
+    const { e, n } = latLngToUtmStrings(unit.lat, unit.lng);
+    setUnitForm({ id: unit.id, name: unit.name, role: unit.role, status: unit.status, utmE: e, utmN: n });
     setEditUnitId(unit.id);
     setShowUnitForm(true);
   };
   const saveUnit = () => {
-    const data = { ...unitForm, lat: parseFloat(unitForm.lat) || 0, lng: parseFloat(unitForm.lng) || 0 };
+    const { lat, lng } = utmStringsToLatLng(unitForm.utmE, unitForm.utmN);
+    const data = {
+      id: unitForm.id,
+      name: unitForm.name,
+      role: unitForm.role,
+      status: unitForm.status,
+      lat,
+      lng,
+    };
     if (editUnitId) {
       onEditUnit(editUnitId, data);
     } else {
@@ -51,18 +98,29 @@ export default function RightPanel({
     setShowUnitForm(false);
   };
 
+  // ── Incident helpers ──────────────────────────────────────
   const openAddIncident = () => {
-    setIncidentForm({ id: '', title: '', desc: '', priority: 'medium', lat: '', lng: '', icon: '🚨' });
+    setIncidentForm({ id: '', title: '', desc: '', priority: 'medium', utmE: '', utmN: '', icon: '🚨' });
     setEditIncidentId(null);
     setShowIncidentForm(true);
   };
   const openEditIncident = (inc) => {
-    setIncidentForm({ id: inc.id, title: inc.title, desc: inc.desc, priority: inc.priority, lat: inc.lat, lng: inc.lng, icon: inc.icon || '🚨' });
+    const { e, n } = latLngToUtmStrings(inc.lat, inc.lng);
+    setIncidentForm({ id: inc.id, title: inc.title, desc: inc.desc, priority: inc.priority, utmE: e, utmN: n, icon: inc.icon || '🚨' });
     setEditIncidentId(inc.id);
     setShowIncidentForm(true);
   };
   const saveIncident = () => {
-    const data = { ...incidentForm, lat: parseFloat(incidentForm.lat) || 0, lng: parseFloat(incidentForm.lng) || 0 };
+    const { lat, lng } = utmStringsToLatLng(incidentForm.utmE, incidentForm.utmN);
+    const data = {
+      id: incidentForm.id,
+      title: incidentForm.title,
+      desc: incidentForm.desc,
+      priority: incidentForm.priority,
+      icon: incidentForm.icon,
+      lat,
+      lng,
+    };
     if (editIncidentId) {
       onEditIncident(editIncidentId, data);
     } else {
@@ -72,6 +130,7 @@ export default function RightPanel({
     setShowIncidentForm(false);
   };
 
+  // ── Mission helpers ───────────────────────────────────────
   const openAddMission = () => {
     setMissionForm({ id: '', title: '', desc: '', incidentId: (incidents || [])[0]?.id || '', assignedUnitIds: [] });
     setEditMissionId(null);
@@ -150,8 +209,16 @@ export default function RightPanel({
                       <option value="warning">Advarsel</option>
                       <option value="offline">Offline</option>
                     </select>
-                    <input className="rp-input" placeholder="Lat (f.eks 59.91)" value={unitForm.lat} onChange={e => setUnitForm(f => ({ ...f, lat: e.target.value }))} />
-                    <input className="rp-input" placeholder="Lng (f.eks 10.74)" value={unitForm.lng} onChange={e => setUnitForm(f => ({ ...f, lng: e.target.value }))} />
+                    <div className="rp-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Koordinater (UTM33/ETRS89)</span>
+                      {onRequestPickLocation && (
+                        <button className="rp-pick-btn" onClick={() => onRequestPickLocation('unit')}>
+                          📍 Velg fra kart
+                        </button>
+                      )}
+                    </div>
+                    <input className="rp-input" placeholder="Øst (f.eks 597000)" value={unitForm.utmE} onChange={e => setUnitForm(f => ({ ...f, utmE: e.target.value }))} />
+                    <input className="rp-input" placeholder="Nord (f.eks 6644000)" value={unitForm.utmN} onChange={e => setUnitForm(f => ({ ...f, utmN: e.target.value }))} />
                     <div className="rp-form-actions">
                       <button className="rp-btn" onClick={() => setShowUnitForm(false)}>Avbryt</button>
                       <button className="rp-btn primary" onClick={saveUnit}>Lagre</button>
@@ -195,8 +262,16 @@ export default function RightPanel({
                       <option value="low">Lav</option>
                     </select>
                     <input className="rp-input" placeholder="Ikon (emoji, f.eks 🚨)" value={incidentForm.icon} onChange={e => setIncidentForm(f => ({ ...f, icon: e.target.value }))} />
-                    <input className="rp-input" placeholder="Lat (f.eks 59.91)" value={incidentForm.lat} onChange={e => setIncidentForm(f => ({ ...f, lat: e.target.value }))} />
-                    <input className="rp-input" placeholder="Lng (f.eks 10.74)" value={incidentForm.lng} onChange={e => setIncidentForm(f => ({ ...f, lng: e.target.value }))} />
+                    <div className="rp-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Koordinater (UTM33/ETRS89)</span>
+                      {onRequestPickLocation && (
+                        <button className="rp-pick-btn" onClick={() => onRequestPickLocation('incident')}>
+                          📍 Velg fra kart
+                        </button>
+                      )}
+                    </div>
+                    <input className="rp-input" placeholder="Øst (f.eks 597000)" value={incidentForm.utmE} onChange={e => setIncidentForm(f => ({ ...f, utmE: e.target.value }))} />
+                    <input className="rp-input" placeholder="Nord (f.eks 6644000)" value={incidentForm.utmN} onChange={e => setIncidentForm(f => ({ ...f, utmN: e.target.value }))} />
                     <div className="rp-form-actions">
                       <button className="rp-btn" onClick={() => setShowIncidentForm(false)}>Avbryt</button>
                       <button className="rp-btn primary" onClick={saveIncident}>Lagre</button>

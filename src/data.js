@@ -7,6 +7,30 @@ export const LIGHT_BASEMAP_URL =
 export const DARK_BASEMAP_URL =
   'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer';
 
+// ── Basemap options ──────────────────────────────────────────
+// Custom entries use the Norwegian VectorTileServer URLs above.
+// ArcGIS Online entries use built-in named basemaps from ArcGIS Online.
+export const BASEMAP_OPTIONS = [
+  { id: 'dark',              label: 'Mørkt kart (NO)',  type: 'custom' },
+  { id: 'light',             label: 'Lyst kart (NO)',   type: 'custom' },
+  { id: 'dark-gray-vector',  label: 'Mørkt grå',        type: 'arcgis' },
+  { id: 'gray-vector',       label: 'Lyst grå',          type: 'arcgis' },
+  { id: 'streets-vector',    label: 'Gatenett',          type: 'arcgis' },
+  { id: 'satellite',         label: 'Satellitt',         type: 'arcgis' },
+  { id: 'hybrid',            label: 'Hybrid',            type: 'arcgis' },
+  { id: 'topo-vector',       label: 'Terreng',           type: 'arcgis' },
+];
+
+// ── Skoler og barnehager layer ───────────────────────────────
+// Norwegian schools and kindergartens FeatureLayer from geodataonline.no
+// (Update the URL if the service path changes)
+export const SKOLER_BARNEHAGER_URL =
+  'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheBarnehageSkole/FeatureServer/0';
+
+// Portal item ID used for the ArcGIS Search / Locator widget
+export const SEARCH_LOCATOR_ITEM_ID = '0727269857e14e088e3b10dd28663a89';
+export const SEARCH_PORTAL_URL = 'https://beredskap.maps.arcgis.com';
+
 // ── Nordic Shield ────────────────────────────────────────────
 export const UNITS_NS = [
   { id: 'A1', name: 'Alpha-1',   role: 'Rekognosering',   status: 'online',  moving: true,  lat: 59.360, lng: 18.050 },

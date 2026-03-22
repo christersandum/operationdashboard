@@ -1,7 +1,9 @@
 import React, { useRef, useEffect } from 'react';
+import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
-import Map from '@arcgis/core/Map';
+import Basemap from '@arcgis/core/Basemap';
 import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
+import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
@@ -9,13 +11,35 @@ import Polygon from '@arcgis/core/geometry/Polygon';
 import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol';
 import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import SimpleMarkerSymbol from '@arcgis/core/symbols/SimpleMarkerSymbol';
-import TextSymbol from '@arcgis/core/symbols/TextSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
-import { LIGHT_BASEMAP_URL, DARK_BASEMAP_URL, INCIDENT_COLORS } from '../data';
+import Search from '@arcgis/core/widgets/Search';
+import PortalItem from '@arcgis/core/portal/PortalItem';
+import {
+  LIGHT_BASEMAP_URL,
+  DARK_BASEMAP_URL,
+  BASEMAP_OPTIONS,
+  INCIDENT_COLORS,
+  SKOLER_BARNEHAGER_URL,
+  SEARCH_LOCATOR_ITEM_ID,
+  SEARCH_PORTAL_URL,
+} from '../data';
+import { wgs84ToUTM33N } from '../utils/coordUtils';
 
 // Mission marker positioning: offset from incident so markers don't overlap
-const MISSION_MARKER_OFFSET = 0.001; // ~100m in degrees
-const MISSION_GRID_COLS     = 3;      // arrange markers in 3-column grid
+const MISSION_MARKER_OFFSET = 0.001; // ~100 m in degrees
+const MISSION_GRID_COLS     = 3;     // arrange markers in 3-column grid
+
+// ── Helper: build a Basemap instance from a BASEMAP_OPTIONS entry ──
+function buildBasemap(basemapId) {
+  const option = BASEMAP_OPTIONS.find(b => b.id === basemapId);
+  if (!option || option.type === 'custom') {
+    // Norwegian custom VectorTileServer basemaps
+    const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
+    return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
+  }
+  // ArcGIS Online named basemap (uses built-in style)
+  return new Basemap({ style: { id: basemapId } });
+}
 
 export default function ArcGISMap({
   center,
@@ -31,31 +55,49 @@ export default function ArcGISMap({
   onZoomChange,
   drawAOMode,
   onMapClick,
+  skolerBarnehagerVisible,
+  pickingLocation,
 }) {
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
   const drawAOModeRef = useRef(drawAOMode);
   const mapRef      = useRef(null);
-  const darkLayerRef  = useRef(null);
-  const lightLayerRef = useRef(null);
-  const unitLayerRef  = useRef(null);
+  const basemapRef  = useRef(basemap);
+
+  const skolerLayerRef   = useRef(null);
+  const unitLayerRef     = useRef(null);
   const incidentLayerRef = useRef(null);
   const missionLayerRef  = useRef(null);
-  const aoLayerRef    = useRef(null);
+  const aoLayerRef       = useRef(null);
+
   const unitGraphicsRef     = useRef({});
   const incidentGraphicsRef = useRef({});
   const missionGraphicsRef  = useRef({});
-  const basemapRef  = useRef(basemap);
 
   // ── Init map once ──────────────────────────────────────────
   useEffect(() => {
     if (!mapDivRef.current || viewRef.current) return;
 
-    const darkLayer  = new VectorTileLayer({ url: DARK_BASEMAP_URL });
-    const lightLayer = new VectorTileLayer({ url: LIGHT_BASEMAP_URL });
-    darkLayerRef.current  = darkLayer;
-    lightLayerRef.current = lightLayer;
+    // ── Skoler og barnehager FeatureLayer ────────────────────
+    const skolerLayer = new FeatureLayer({
+      url: SKOLER_BARNEHAGER_URL,
+      id: 'skoler_barnehager',
+      title: 'Skoler og barnehager',
+      visible: !!skolerBarnehagerVisible,
+      renderer: {
+        type: 'simple',
+        symbol: {
+          type: 'simple-marker',
+          style: 'square',
+          color: [255, 200, 0, 180],
+          size: 8,
+          outline: { color: [255, 200, 0, 255], width: 1.5 },
+        },
+      },
+    });
+    skolerLayerRef.current = skolerLayer;
 
+    // ── Operational graphics layers ──────────────────────────
     const unitLayer     = new GraphicsLayer({ id: 'units' });
     const incidentLayer = new GraphicsLayer({ id: 'incidents' });
     const missionLayer  = new GraphicsLayer({ id: 'missions' });
@@ -65,36 +107,80 @@ export default function ArcGISMap({
     missionLayerRef.current  = missionLayer;
     aoLayerRef.current       = aoLayer;
 
-    const arcgisMap = new Map({
-      layers: [darkLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
+    // ── WebMap with initial basemap ──────────────────────────
+    const webMap = new WebMap({
+      basemap: buildBasemap(basemap),
+      layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
     });
-    mapRef.current = arcgisMap;
+    mapRef.current = webMap;
 
+    // ── MapView ──────────────────────────────────────────────
     const view = new MapView({
       container: mapDivRef.current,
-      map: arcgisMap,
+      map: webMap,
       center,
       zoom,
       ui: { components: ['zoom'] },
     });
     viewRef.current = view;
 
-    view.on('pointer-move', (evt) => {
-      const pt = view.toMap({ x: evt.x, y: evt.y });
-      if (pt && onCoordMove) onCoordMove(pt.latitude, pt.longitude);
+    // ── Search widget with locator from beredskap portal ─────
+    view.when(async () => {
+      // Report initial zoom once the view is ready
+      if (onZoomChange) onZoomChange(Math.round(view.zoom));
+
+      let searchSources = [];
+      try {
+        const portalItem = new PortalItem({
+          id: SEARCH_LOCATOR_ITEM_ID,
+          portal: { url: SEARCH_PORTAL_URL },
+        });
+        await portalItem.load();
+        if (portalItem.url) {
+          searchSources = [{
+            url: portalItem.url,
+            singleLineFieldName: 'SingleLine',
+            name: 'Adressesøk (DSB)',
+            placeholder: 'Søk sted eller adresse…',
+            outFields: ['*'],
+          }];
+        }
+      } catch (err) {
+        // Portal item unavailable (network blocked or auth required) — Search widget falls back to its default sources
+        console.warn('[ArcGISMap] Could not load search locator from portal item:', err);
+      }
+
+      const searchWidget = new Search({
+        view,
+        includeDefaultSources: searchSources.length === 0,
+        sources: searchSources,
+        searchAllEnabled: false,
+      });
+      view.ui.add(searchWidget, 'top-right');
+
+      if (onViewReady) onViewReady(view);
     });
 
+    // ── Pointer move → UTM33 coords ──────────────────────────
+    view.on('pointer-move', (evt) => {
+      const pt = view.toMap({ x: evt.x, y: evt.y });
+      if (pt && onCoordMove) {
+        const utm = wgs84ToUTM33N(pt.latitude, pt.longitude);
+        onCoordMove(pt.latitude, pt.longitude, utm);
+      }
+    });
+
+    // ── Map click ────────────────────────────────────────────
     view.on('click', (evt) => {
       const pt = view.toMap({ x: evt.x, y: evt.y });
-      if (pt && onMapClick) onMapClick(pt.latitude, pt.longitude);
+      if (pt && onMapClick) {
+        const utm = wgs84ToUTM33N(pt.latitude, pt.longitude);
+        onMapClick(pt.latitude, pt.longitude, utm);
+      }
     });
 
     view.watch('zoom', (z) => {
       if (onZoomChange) onZoomChange(Math.round(z));
-    });
-
-    view.when(() => {
-      if (onViewReady) onViewReady(view);
     });
 
     return () => {
@@ -108,21 +194,18 @@ export default function ArcGISMap({
     drawAOModeRef.current = drawAOMode;
   }, [drawAOMode]);
 
+  // ── Picking location → crosshair cursor ───────────────────
+  useEffect(() => {
+    if (viewRef.current) {
+      viewRef.current.cursor = pickingLocation ? 'crosshair' : 'default';
+    }
+  }, [pickingLocation]);
+
   // ── Basemap switch ─────────────────────────────────────────
   useEffect(() => {
-    if (!mapRef.current || !darkLayerRef.current || !lightLayerRef.current) return;
-    const arcgisMap = mapRef.current;
-    if (basemap === 'dark') {
-      arcgisMap.remove(lightLayerRef.current);
-      if (!arcgisMap.layers.includes(darkLayerRef.current)) {
-        arcgisMap.add(darkLayerRef.current, 0);
-      }
-    } else {
-      arcgisMap.remove(darkLayerRef.current);
-      if (!arcgisMap.layers.includes(lightLayerRef.current)) {
-        arcgisMap.add(lightLayerRef.current, 0);
-      }
-    }
+    if (!mapRef.current) return;
+    if (basemap === basemapRef.current) return;
+    mapRef.current.basemap = buildBasemap(basemap);
     basemapRef.current = basemap;
   }, [basemap]);
 
@@ -131,6 +214,13 @@ export default function ArcGISMap({
     if (!viewRef.current) return;
     viewRef.current.goTo({ center, zoom }, { animate: true, duration: 600 }).catch(() => {});
   }, [center, zoom]);
+
+  // ── Skoler/Barnehager visibility ──────────────────────────
+  useEffect(() => {
+    if (skolerLayerRef.current) {
+      skolerLayerRef.current.visible = !!skolerBarnehagerVisible;
+    }
+  }, [skolerBarnehagerVisible]);
 
   // ── AO polygon ────────────────────────────────────────────
   useEffect(() => {
@@ -305,7 +395,7 @@ function makeUnitSymbol(color, statusColor) {
   });
 }
 
-function makeIncidentSymbol(color, icon) {
+function makeIncidentSymbol(color) {
   return new SimpleMarkerSymbol({
     style: 'square',
     color: [...color, 60],
