@@ -9,7 +9,9 @@ import {
   INCIDENTS_SWORD_STAGED,
   MISSIONS_SWORD_STAGED,
   INCIDENT_COLORS,
+  BASEMAP_OPTIONS,
 } from './data';
+import { formatUTM33 } from './utils/coordUtils';
 
 const UNIT_MOVE_SPEED  = 0.004;
 const UNIT_RANDOM_STEP = 0.003;
@@ -73,6 +75,10 @@ export default function App() {
   const [newOpDialogOpen, setNewOpDialogOpen] = useState(false);
   const [newOpTemplateId, setNewOpTemplateId] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [skolerBarnehagerVisible, setSkolerBarnehagerVisible] = useState(false);
+  const [basemapSelectorOpen, setBasemapSelectorOpen] = useState(false);
+  const [pickingLocation, setPickingLocation] = useState(null); // null | 'unit' | 'incident'
+  const [pickedLocation, setPickedLocation] = useState(null);   // { lat, lng, utm }
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
@@ -455,10 +461,6 @@ export default function App() {
     setActiveTab('chat');
   };
 
-  const toggleBasemap = useCallback(() => {
-    setBasemap(b => b === 'dark' ? 'light' : 'dark');
-  }, []);
-
   const handleAddUnit = useCallback((unitData) => {
     const newUnit = { ...unitData, target: null, assignedIncident: null, incidentColorIndex: null, signal: 4 };
     unitsRef.current = [...unitsRef.current, newUnit];
@@ -685,25 +687,32 @@ export default function App() {
     moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleMapClick = useCallback((lat, lng) => {
-    if (!drawAOMode) return;
-    if (!aoFirstPoint) {
-      setAoFirstPoint({ lat, lng });
-    } else {
-      const p1 = aoFirstPoint;
-      const p2 = { lat, lng };
-      const minLat = Math.min(p1.lat, p2.lat);
-      const maxLat = Math.max(p1.lat, p2.lat);
-      const minLng = Math.min(p1.lng, p2.lng);
-      const maxLng = Math.max(p1.lng, p2.lng);
-      // Clockwise rectangle: top-left, top-right, bottom-right, bottom-left, close
-      const rect = [[minLng, maxLat], [maxLng, maxLat], [maxLng, minLat], [minLng, minLat], [minLng, maxLat]];
-      setCurrentAoCoords(rect);
-      setDrawAOMode(false);
-      setAoFirstPoint(null);
-      addSystemChat('🗺 AO rektangel tegnet og oppdatert.', '#0078d4');
+  const handleMapClick = useCallback((lat, lng, utm) => {
+    if (drawAOMode) {
+      if (!aoFirstPoint) {
+        setAoFirstPoint({ lat, lng });
+      } else {
+        const p1 = aoFirstPoint;
+        const p2 = { lat, lng };
+        const minLat = Math.min(p1.lat, p2.lat);
+        const maxLat = Math.max(p1.lat, p2.lat);
+        const minLng = Math.min(p1.lng, p2.lng);
+        const maxLng = Math.max(p1.lng, p2.lng);
+        // Clockwise rectangle: top-left, top-right, bottom-right, bottom-left, close
+        const rect = [[minLng, maxLat], [maxLng, maxLat], [maxLng, minLat], [minLng, minLat], [minLng, maxLat]];
+        setCurrentAoCoords(rect);
+        setDrawAOMode(false);
+        setAoFirstPoint(null);
+        addSystemChat('🗺 AO rektangel tegnet og oppdatert.', '#0078d4');
+      }
+      return;
     }
-  }, [drawAOMode, aoFirstPoint]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Location picking for unit/incident forms
+    if (pickingLocation) {
+      setPickedLocation({ lat, lng, utm, forForm: pickingLocation });
+      setPickingLocation(null);
+    }
+  }, [drawAOMode, aoFirstPoint, pickingLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const confirmDeleteOperation = useCallback(() => {
     setDeleteConfirmOpen(false);
@@ -777,10 +786,12 @@ export default function App() {
             missions={missionsVisible ? missions : []}
             aoCoords={currentAoCoords || opConfig.aoCoords}
             aoLabel={opConfig.aoLabel}
-            onCoordMove={(lat, lng) => setMapCoords({ lat, lng })}
+            onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
             onZoomChange={setCurrentZoom}
             drawAOMode={drawAOMode}
             onMapClick={handleMapClick}
+            skolerBarnehagerVisible={skolerBarnehagerVisible}
+            pickingLocation={pickingLocation}
           />
 
           {/* Toolbar */}
@@ -846,17 +857,12 @@ export default function App() {
                 <input type="checkbox" checked={missionsVisible} onChange={e => setMissionsVisible(e.target.checked)} />
                 Oppdrag
               </label>
+              <label className="layer-item">
+                <input type="checkbox" checked={skolerBarnehagerVisible} onChange={e => setSkolerBarnehagerVisible(e.target.checked)} />
+                🏫 Skoler og barnehager
+              </label>
             </div>
           )}
-
-          {/* Map search */}
-          <div className="map-search-bar">
-            <svg style={{ paddingLeft: '10px', color: '#6b7280' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input type="text" placeholder="Søk sted…" />
-          </div>
 
           {/* Info bar */}
           <div className="map-info-bar">
@@ -867,8 +873,8 @@ export default function App() {
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
               </svg>
               {' '}
-              {mapCoords
-                ? `${mapCoords.lat.toFixed(4)}°N ${mapCoords.lng.toFixed(4)}°E`
+              {mapCoords && mapCoords.utm
+                ? `${formatUTM33(mapCoords.utm)} (UTM33/ETRS89)`
                 : 'Hold musepeker over kartet for koordinater'}
             </span>
             <span>
@@ -888,17 +894,45 @@ export default function App() {
             </span>
           </div>
 
-          {/* Basemap toggle */}
-          <button
-            className={`basemap-toggle-btn${basemap === 'light' ? ' light-active' : ''}`}
-            onClick={toggleBasemap}
-            title="Bytt kartbakgrunn"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-            <span>{basemap === 'dark' ? 'Lyst kart' : 'Mørkt kart'}</span>
-          </button>
+          {/* Basemap selector */}
+          <div className="basemap-selector-wrap">
+            <button
+              className="basemap-toggle-btn"
+              onClick={e => { e.stopPropagation(); setBasemapSelectorOpen(v => !v); }}
+              title="Velg kartbakgrunn"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              <span>{BASEMAP_OPTIONS.find(b => b.id === basemap)?.label ?? 'Kart'}</span>
+            </button>
+            {basemapSelectorOpen && (
+              <div className="basemap-dropdown" onClick={e => e.stopPropagation()}>
+                {BASEMAP_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    className={`basemap-option${basemap === opt.id ? ' active' : ''}`}
+                    onClick={() => { setBasemap(opt.id); setBasemapSelectorOpen(false); }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pick-location banner */}
+          {pickingLocation && (
+            <div className="pick-location-banner">
+              📍 Klikk på kartet for å velge plassering
+              <button
+                className="pick-location-cancel"
+                onClick={() => setPickingLocation(null)}
+              >
+                Avbryt
+              </button>
+            </div>
+          )}
 
           {/* Time Player - always visible */}
           <div className="time-player">
@@ -943,6 +977,11 @@ export default function App() {
           onEditMission={handleEditMission}
           onDeleteMission={handleDeleteMission}
           onAutoAssign={handleAutoAssign}
+          onRequestPickLocation={(type) => {
+            setPickingLocation(type);
+            setPickedLocation(null);
+          }}
+          pickedLocation={pickedLocation}
         />
       </div>
 
@@ -1040,10 +1079,10 @@ export default function App() {
         </div>
       )}
 
-      {layerPanelOpen && (
+      {(layerPanelOpen || basemapSelectorOpen) && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 5 }}
-          onClick={() => setLayerPanelOpen(false)}
+          onClick={() => { setLayerPanelOpen(false); setBasemapSelectorOpen(false); }}
         />
       )}
     </div>
