@@ -9,15 +9,16 @@ export const DARK_BASEMAP_URL =
 
 // ── Basemap options ──────────────────────────────────────────
 // Custom entries use the Norwegian VectorTileServer URLs above.
-// OSM entries use ArcGIS Basemap Styles Service with osm/ prefix — no API key required.
+// ArcGIS Online entries use built-in named basemaps (require esriConfig.apiKey).
 export const BASEMAP_OPTIONS = [
-  { id: 'dark',               label: 'Mørkt kart (NO)',  type: 'custom' },
-  { id: 'light',              label: 'Lyst kart (NO)',   type: 'custom' },
-  { id: 'osm/dark-gray',      label: 'Mørkt grå',        type: 'osm' },
-  { id: 'osm/light-gray',     label: 'Lyst grå',          type: 'osm' },
-  { id: 'osm/standard',       label: 'Gatenett',          type: 'osm' },
-  { id: 'osm/hybrid',         label: 'Hybrid',            type: 'osm' },
-  { id: 'osm/streets-relief', label: 'Terreng',           type: 'osm' },
+  { id: 'dark',              label: 'Mørkt kart (NO)',  type: 'custom' },
+  { id: 'light',             label: 'Lyst kart (NO)',   type: 'custom' },
+  { id: 'dark-gray-vector',  label: 'Mørkt grå',        type: 'arcgis' },
+  { id: 'gray-vector',       label: 'Lyst grå',          type: 'arcgis' },
+  { id: 'streets-vector',    label: 'Gatenett',          type: 'arcgis' },
+  { id: 'satellite',         label: 'Satellitt',         type: 'arcgis' },
+  { id: 'hybrid',            label: 'Hybrid',            type: 'arcgis' },
+  { id: 'topo-vector',       label: 'Terreng',           type: 'arcgis' },
 ];
 
 // ── Skoler og barnehager layer ───────────────────────────────

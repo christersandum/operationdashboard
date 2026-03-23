@@ -37,7 +37,7 @@ function buildBasemap(basemapId) {
     const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
     return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
   }
-  // OSM-based styles via ArcGIS Basemap Styles Service — no API key required
+  // ArcGIS Online named basemap (requires esriConfig.apiKey set in main.jsx)
   return new Basemap({ style: { id: basemapId } });
 }
 
