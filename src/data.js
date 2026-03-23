@@ -9,7 +9,7 @@ export const DARK_BASEMAP_URL =
 
 // ── Basemap options ──────────────────────────────────────────
 // Custom entries use the Norwegian VectorTileServer URLs above.
-// ArcGIS Online entries use built-in named basemaps from ArcGIS Online.
+// ArcGIS Online entries use built-in named basemaps (require esriConfig.apiKey).
 export const BASEMAP_OPTIONS = [
   { id: 'dark',              label: 'Mørkt kart (NO)',  type: 'custom' },
   { id: 'light',             label: 'Lyst kart (NO)',   type: 'custom' },
