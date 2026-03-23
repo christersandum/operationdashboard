@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import WebMap from '@arcgis/core/WebMap';
+import Map from '@arcgis/core/Map';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
 import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
@@ -37,7 +37,7 @@ function buildBasemap(basemapId) {
     const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
     return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
   }
-  // ArcGIS Online named basemap (uses built-in style)
+  // OSM-based styles via ArcGIS Basemap Styles Service — no API key required
   return new Basemap({ style: { id: basemapId } });
 }
 
@@ -107,17 +107,17 @@ export default function ArcGISMap({
     missionLayerRef.current  = missionLayer;
     aoLayerRef.current       = aoLayer;
 
-    // ── WebMap with initial basemap ──────────────────────────
-    const webMap = new WebMap({
+    // ── Map with initial basemap ─────────────────────────────
+    const map = new Map({
       basemap: buildBasemap(basemap),
       layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
     });
-    mapRef.current = webMap;
+    mapRef.current = map;
 
     // ── MapView ──────────────────────────────────────────────
     const view = new MapView({
       container: mapDivRef.current,
-      map: webMap,
+      map: map,
       center,
       zoom,
       ui: { components: ['zoom'] },
@@ -292,7 +292,7 @@ export default function ArcGISMap({
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeIncidentSymbol(priorityColor, inc.icon),
+          symbol: makeIncidentSymbol(priorityColor),
           attributes: { ...inc },
           popupTemplate: makeIncidentPopupTemplate(inc),
         });
