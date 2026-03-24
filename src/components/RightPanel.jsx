@@ -36,6 +36,8 @@ export default function RightPanel({
   onAutoAssign,
   onRequestPickLocation,
   pickedLocation,
+  width,
+  mapCenter,
 }) {
   const [activeTab, setActiveTab] = useState('units');
 
@@ -80,7 +82,20 @@ export default function RightPanel({
     setShowUnitForm(true);
   };
   const saveUnit = () => {
-    const { lat, lng } = utmStringsToLatLng(unitForm.utmE, unitForm.utmN);
+    let lat, lng;
+    if (unitForm.utmE && unitForm.utmN) {
+      const result = utmStringsToLatLng(unitForm.utmE, unitForm.utmN);
+      lat = result.lat;
+      lng = result.lng;
+    } else if (mapCenter) {
+      // Use current map center as default position
+      lng = mapCenter[0];
+      lat = mapCenter[1];
+    } else {
+      // No location available — use a Norwegian default (central Oslo area)
+      lat = 59.913;
+      lng = 10.741;
+    }
     const data = {
       id: unitForm.id,
       name: unitForm.name,
@@ -111,7 +126,19 @@ export default function RightPanel({
     setShowIncidentForm(true);
   };
   const saveIncident = () => {
-    const { lat, lng } = utmStringsToLatLng(incidentForm.utmE, incidentForm.utmN);
+    let lat, lng;
+    if (incidentForm.utmE && incidentForm.utmN) {
+      const result = utmStringsToLatLng(incidentForm.utmE, incidentForm.utmN);
+      lat = result.lat;
+      lng = result.lng;
+    } else if (mapCenter) {
+      lng = mapCenter[0];
+      lat = mapCenter[1];
+    } else {
+      // No location available — use a Norwegian default (central Oslo area)
+      lat = 59.913;
+      lng = 10.741;
+    }
     const data = {
       id: incidentForm.id,
       title: incidentForm.title,
@@ -158,7 +185,7 @@ export default function RightPanel({
   };
 
   return (
-    <div className={`right-panel${open ? ' open' : ''}`}>
+    <div className={`right-panel${open ? ' open' : ''}`} style={open && width ? { width: `${width}px` } : undefined}>
       {/* Toggle tab - always in flow so map never overlaps */}
       <button className="right-panel-toggle" onClick={onToggle} title={open ? 'Skjul panel' : 'Åpne panel'}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -210,7 +237,7 @@ export default function RightPanel({
                       <option value="offline">Offline</option>
                     </select>
                     <div className="rp-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Koordinater (UTM33/ETRS89)</span>
+                      <span>Koordinater (UTM33/ETRS89) <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>— valgfri, klikk kart</span></span>
                       {onRequestPickLocation && (
                         <button className="rp-pick-btn" onClick={() => onRequestPickLocation('unit')}>
                           📍 Velg fra kart
@@ -263,7 +290,7 @@ export default function RightPanel({
                     </select>
                     <input className="rp-input" placeholder="Ikon (emoji, f.eks 🚨)" value={incidentForm.icon} onChange={e => setIncidentForm(f => ({ ...f, icon: e.target.value }))} />
                     <div className="rp-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Koordinater (UTM33/ETRS89)</span>
+                      <span>Koordinater (UTM33/ETRS89) <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>— valgfri, klikk kart</span></span>
                       {onRequestPickLocation && (
                         <button className="rp-pick-btn" onClick={() => onRequestPickLocation('incident')}>
                           📍 Velg fra kart

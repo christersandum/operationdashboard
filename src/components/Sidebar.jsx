@@ -20,6 +20,7 @@ export default function Sidebar({
   unreadChat,
   unreadIncidents,
   onTabChange,
+  width,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -40,7 +41,7 @@ export default function Sidebar({
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={width ? { width: `${width}px` } : undefined}>
       <nav className="tab-bar">
         {tabs.map(t => (
           <button

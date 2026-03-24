@@ -192,6 +192,8 @@ html, body, #root {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  min-width: 200px;
+  max-width: 600px;
 }
 
 .tab-bar {
@@ -1356,9 +1358,12 @@ arcgis-map {
   overflow: hidden;
   /* Always at least 28px wide for the toggle tab */
   width: 28px;
+  min-width: 28px;
 }
 .right-panel.open {
-  width: 368px; /* 28px toggle + 340px content */
+  width: 368px; /* 28px toggle + 340px content — overridden by inline style when resizing */
+  min-width: 250px;
+  max-width: 700px;
 }
 .right-panel-toggle {
   width: 28px;
@@ -1392,8 +1397,8 @@ arcgis-map {
 .right-panel-content {
   display: flex;
   flex-direction: column;
-  width: 340px;
-  min-width: 340px;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   overflow: hidden;
 }
@@ -1677,3 +1682,75 @@ arcgis-map {
   transition: background 0.15s;
 }
 .rp-pick-btn:hover { background: rgba(0,120,212,0.28); }
+
+/* ── Panel resize handles ────────────────────────────────── */
+.panel-resize-handle {
+  flex-shrink: 0;
+  background: transparent;
+  transition: background 0.15s;
+  z-index: 10;
+  position: relative;
+}
+.panel-resize-handle.vertical {
+  width: 5px;
+  cursor: col-resize;
+  border-left: 1px solid var(--border-color);
+}
+.panel-resize-handle.vertical.right {
+  border-left: none;
+  border-right: 1px solid var(--border-color);
+}
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  background: rgba(0,120,212,0.3);
+}
+
+/* ── Fil / Verktøy dropdown ─────────────────────────────── */
+.fil-menu-wrap {
+  position: relative;
+}
+.fil-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 200;
+  overflow: hidden;
+  padding: 4px 0;
+}
+.fil-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+.fil-dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.fil-dropdown-item.active {
+  color: var(--accent-blue);
+}
+.fil-dropdown-item.danger {
+  color: var(--accent-red);
+}
+.fil-dropdown-item.danger:hover {
+  background: rgba(231,76,60,0.1);
+}
+.fil-dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}

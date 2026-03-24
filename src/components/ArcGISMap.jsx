@@ -50,6 +50,7 @@ export default function ArcGISMap({
   missions,
   aoCoords,
   aoLabel,
+  aoVisible,
   onViewReady,
   onCoordMove,
   onZoomChange,
@@ -61,6 +62,7 @@ export default function ArcGISMap({
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
   const drawAOModeRef = useRef(drawAOMode);
+  const onMapClickRef = useRef(onMapClick);
   const mapRef      = useRef(null);
   const basemapRef  = useRef(basemap);
 
@@ -173,9 +175,9 @@ export default function ArcGISMap({
     // ── Map click ────────────────────────────────────────────
     view.on('click', (evt) => {
       const pt = view.toMap({ x: evt.x, y: evt.y });
-      if (pt && onMapClick) {
+      if (pt && onMapClickRef.current) {
         const utm = wgs84ToUTM33N(pt.latitude, pt.longitude);
-        onMapClick(pt.latitude, pt.longitude, utm);
+        onMapClickRef.current(pt.latitude, pt.longitude, utm);
       }
     });
 
@@ -193,6 +195,11 @@ export default function ArcGISMap({
   useEffect(() => {
     drawAOModeRef.current = drawAOMode;
   }, [drawAOMode]);
+
+  // ── Sync onMapClick ref (fix stale closure bug) ────────────
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   // ── Picking location → crosshair cursor ───────────────────
   useEffect(() => {
@@ -241,6 +248,13 @@ export default function ArcGISMap({
     });
     aoLayerRef.current.add(graphic);
   }, [aoCoords, aoLabel]);
+
+  // ── AO visibility ──────────────────────────────────────────
+  useEffect(() => {
+    if (aoLayerRef.current) {
+      aoLayerRef.current.visible = aoVisible !== false;
+    }
+  }, [aoVisible]);
 
   // ── Unit graphics ──────────────────────────────────────────
   useEffect(() => {
