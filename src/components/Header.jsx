@@ -17,6 +17,8 @@ export default function Header({
   onLoadOperation,
   onNewOperation,
   onDeleteOperation,
+  onDrawAO,
+  drawAOMode,
   onSettingsChange,
   timingConfig,
 }) {
@@ -27,6 +29,8 @@ export default function Header({
   const [tzDropdownOpen, setTzDropdownOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [filMenuOpen, setFilMenuOpen] = useState(false);
+  const filMenuRef = useRef(null);
 
   // Settings state
   const defaultSettings = {
@@ -81,6 +85,7 @@ export default function Header({
       if (tzRef.current && !tzRef.current.contains(e.target)) setTzDropdownOpen(false);
       if (adminRef.current && !adminRef.current.contains(e.target)) setAdminOpen(false);
       if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false);
+      if (filMenuRef.current && !filMenuRef.current.contains(e.target)) setFilMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -172,37 +177,77 @@ export default function Header({
         Kringkast
       </button>
 
-      <button className="header-btn" title="Lagre operasjon" onClick={onSaveOperation}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-          <polyline points="17 21 17 13 7 13 7 21"/>
-          <polyline points="7 3 7 8 15 8"/>
-        </svg>
-        Lagre
-      </button>
-      <label className="header-btn" title="Last inn operasjon" tabIndex={0} style={{ cursor: 'pointer' }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.querySelector('input').click(); }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-        </svg>
-        Last inn
-        <input type="file" accept=".json" style={{ display: 'none' }} onChange={onLoadOperation} />
-      </label>
-      <button className="header-btn" title="Ny operasjon" onClick={onNewOperation}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Ny
-      </button>
-      {onDeleteOperation && (
-        <button className="header-btn" title="Slett/nullstill operasjon" onClick={onDeleteOperation}
-          style={{ color: 'var(--accent-red)', borderColor: 'rgba(231,76,60,0.3)' }}>
+      {/* Fil / Verktøy dropdown */}
+      <div className="fil-menu-wrap" ref={filMenuRef}>
+        <button
+          className={`header-btn${filMenuOpen ? ' active' : ''}`}
+          title="Fil og verktøy"
+          onClick={() => setFilMenuOpen(v => !v)}
+        >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
-          Slett
+          Fil
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </button>
-      )}
+        {filMenuOpen && (
+          <div className="fil-dropdown">
+            <button
+              className="fil-dropdown-item"
+              onClick={() => { setFilMenuOpen(false); onSaveOperation && onSaveOperation(); }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+              Lagre operasjon
+            </button>
+            <label className="fil-dropdown-item" style={{ cursor: 'pointer' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              Last inn operasjon
+              <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => { setFilMenuOpen(false); onLoadOperation && onLoadOperation(e); }} />
+            </label>
+            <div className="fil-dropdown-divider" />
+            <button
+              className="fil-dropdown-item"
+              onClick={() => { setFilMenuOpen(false); onNewOperation && onNewOperation(); }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Ny operasjon
+            </button>
+            <div className="fil-dropdown-divider" />
+            <button
+              className={`fil-dropdown-item${drawAOMode ? ' active' : ''}`}
+              onClick={() => { setFilMenuOpen(false); onDrawAO && onDrawAO(); }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="0"/>
+              </svg>
+              {drawAOMode ? 'Avbryt AO-tegning' : 'Tegn AO'}
+            </button>
+            <div className="fil-dropdown-divider" />
+            {onDeleteOperation && (
+              <button
+                className="fil-dropdown-item danger"
+                onClick={() => { setFilMenuOpen(false); onDeleteOperation(); }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+                Slett operasjon
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Settings button */}
       <div className="settings-wrap" ref={settingsRef}>

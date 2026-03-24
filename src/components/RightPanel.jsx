@@ -36,6 +36,7 @@ export default function RightPanel({
   onAutoAssign,
   onRequestPickLocation,
   pickedLocation,
+  width,
 }) {
   const [activeTab, setActiveTab] = useState('units');
 
@@ -158,7 +159,7 @@ export default function RightPanel({
   };
 
   return (
-    <div className={`right-panel${open ? ' open' : ''}`}>
+    <div className={`right-panel${open ? ' open' : ''}`} style={open && width ? { width: `${width}px` } : undefined}>
       {/* Toggle tab - always in flow so map never overlaps */}
       <button className="right-panel-toggle" onClick={onToggle} title={open ? 'Skjul panel' : 'Åpne panel'}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

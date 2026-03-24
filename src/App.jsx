@@ -61,6 +61,7 @@ export default function App() {
   const [unitsVisible,   setUnitsVisible]   = useState(true);
   const [incidentsVisible, setIncidentsVisible] = useState(true);
   const [missionsVisible, setMissionsVisible] = useState(true);
+  const [aoVisible,      setAoVisible]      = useState(true);
   const [scenarioEnded,  setScenarioEnded]  = useState(false);
   const [isPlaying,      setIsPlaying]      = useState(true);
   const [playbackSpeed,  setPlaybackSpeed]  = useState(1);
@@ -68,6 +69,8 @@ export default function App() {
   const SCENARIO_TOTAL_MS = 205000; // 140s last incident + ~65s for arrival msgs + bank chat
 
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [sidebarWidth,   setSidebarWidth]   = useState(310);
+  const [rightPanelWidth, setRightPanelWidth] = useState(368);
   const [drawAOMode, setDrawAOMode] = useState(false);
   const [aoFirstPoint, setAoFirstPoint] = useState(null);
   const [alertInterval, setAlertInterval] = useState(10);
@@ -79,6 +82,14 @@ export default function App() {
   const [basemapSelectorOpen, setBasemapSelectorOpen] = useState(false);
   const [pickingLocation, setPickingLocation] = useState(null); // null | 'unit' | 'incident'
   const [pickedLocation, setPickedLocation] = useState(null);   // { lat, lng, utm }
+
+  // Resize refs
+  const sidebarResizeRef   = useRef(null);
+  const rightPanelResizeRef = useRef(null);
+  const isResizingSidebar  = useRef(false);
+  const isResizingRight    = useRef(false);
+  const resizeStartX       = useRef(0);
+  const resizeStartWidth   = useRef(0);
 
   const simTimers    = useRef([]);
   const moveInterval = useRef(null);
@@ -98,6 +109,49 @@ export default function App() {
 
 
   const opConfig = OPERATION_CONFIG[currentOpId];
+
+  // ── Panel resize handlers ──────────────────────────────────
+  const handleSidebarResizeStart = useCallback((e) => {
+    e.preventDefault();
+    isResizingSidebar.current = true;
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = sidebarWidth;
+
+    const onMove = (ev) => {
+      if (!isResizingSidebar.current) return;
+      const delta = ev.clientX - resizeStartX.current;
+      const newWidth = Math.max(200, Math.min(600, resizeStartWidth.current + delta));
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      isResizingSidebar.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [sidebarWidth]);
+
+  const handleRightPanelResizeStart = useCallback((e) => {
+    e.preventDefault();
+    isResizingRight.current = true;
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = rightPanelWidth;
+
+    const onMove = (ev) => {
+      if (!isResizingRight.current) return;
+      const delta = resizeStartX.current - ev.clientX;
+      const newWidth = Math.max(250, Math.min(700, resizeStartWidth.current + delta));
+      setRightPanelWidth(newWidth);
+    };
+    const onUp = () => {
+      isResizingRight.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [rightPanelWidth]);
 
   const loadOperation = useCallback((opId) => {
     simTimers.current.forEach(clearTimeout);
@@ -380,7 +434,6 @@ export default function App() {
       ];
       const text = messages[Math.floor(Math.random() * messages.length)];
       addChat({ sender: 'System', initials: '⚙', color: '#f39c12', system: true, text });
-      setStats(prev => ({ ...prev, alerts: prev.alerts + 1 }));
     }, intervalSec * 1000);
   }
 
@@ -748,6 +801,8 @@ export default function App() {
         onLoadOperation={handleLoadOperation}
         onNewOperation={() => setNewOpDialogOpen(true)}
         onDeleteOperation={() => setDeleteConfirmOpen(true)}
+        onDrawAO={() => { setDrawAOMode(v => !v); setAoFirstPoint(null); }}
+        drawAOMode={drawAOMode}
         onSettingsChange={(s) => {
           if (s.alertInterval !== undefined) {
             setAlertInterval(s.alertInterval);
@@ -773,6 +828,13 @@ export default function App() {
           unreadChat={unreadChat}
           unreadIncidents={unreadIncidents}
           onTabChange={handleTabChange}
+          width={sidebarWidth}
+        />
+        {/* Sidebar resize handle */}
+        <div
+          className="panel-resize-handle vertical"
+          onMouseDown={handleSidebarResizeStart}
+          title="Dra for å endre bredde"
         />
 
         {/* Map area */}
@@ -786,6 +848,7 @@ export default function App() {
             missions={missionsVisible ? missions : []}
             aoCoords={currentAoCoords || opConfig.aoCoords}
             aoLabel={opConfig.aoLabel}
+            aoVisible={aoVisible}
             onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
             onZoomChange={setCurrentZoom}
             drawAOMode={drawAOMode}
@@ -829,16 +892,18 @@ export default function App() {
               Kartlag
             </button>
 
-            <button
-              className={`map-toolbar-btn${drawAOMode ? ' active' : ''}`}
-              onClick={() => { setDrawAOMode(v => !v); setAoFirstPoint(null); }}
-              title="Tegn AO som rektangel (klikk to hjørner)"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="0"/>
-              </svg>
-              {drawAOMode ? (aoFirstPoint ? 'Klikk 2. hjørne' : 'Klikk 1. hjørne') : 'Tegn AO'}
-            </button>
+            {drawAOMode && (
+              <button
+                className="map-toolbar-btn active"
+                onClick={() => { setDrawAOMode(false); setAoFirstPoint(null); }}
+                title="Avbryt AO-tegning"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="0"/>
+                </svg>
+                {aoFirstPoint ? 'Klikk 2. hjørne' : 'Klikk 1. hjørne'}
+              </button>
+            )}
           </div>
 
           {/* Layer panel */}
@@ -856,6 +921,10 @@ export default function App() {
               <label className="layer-item">
                 <input type="checkbox" checked={missionsVisible} onChange={e => setMissionsVisible(e.target.checked)} />
                 Oppdrag
+              </label>
+              <label className="layer-item">
+                <input type="checkbox" checked={aoVisible} onChange={e => setAoVisible(e.target.checked)} />
+                🗺 AO-område
               </label>
               <label className="layer-item">
                 <input type="checkbox" checked={skolerBarnehagerVisible} onChange={e => setSkolerBarnehagerVisible(e.target.checked)} />
@@ -961,6 +1030,15 @@ export default function App() {
           </div>
         </div>
 
+        {/* Right panel resize handle */}
+        {rightPanelOpen && (
+          <div
+            className="panel-resize-handle vertical right"
+            onMouseDown={handleRightPanelResizeStart}
+            title="Dra for å endre bredde"
+          />
+        )}
+
         <RightPanel
           open={rightPanelOpen}
           onToggle={() => setRightPanelOpen(v => !v)}
@@ -982,6 +1060,7 @@ export default function App() {
             setPickedLocation(null);
           }}
           pickedLocation={pickedLocation}
+          width={rightPanelOpen ? rightPanelWidth : 28}
         />
       </div>
 
