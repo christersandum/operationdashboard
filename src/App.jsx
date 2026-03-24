@@ -17,6 +17,7 @@ const UNIT_MOVE_SPEED  = 0.004;
 const UNIT_RANDOM_STEP = 0.003;
 const ARRIVE_DIST = 0.003;
 const ARRIVAL_MSG_DELAY = 30000;
+const RIGHT_PANEL_TOGGLE_WIDTH = 28; // px — must match .right-panel-toggle width in CSS
 
 function nowTime() {
   const now = new Date();
@@ -1060,7 +1061,8 @@ export default function App() {
             setPickedLocation(null);
           }}
           pickedLocation={pickedLocation}
-          width={rightPanelOpen ? rightPanelWidth : 28}
+          width={rightPanelOpen ? rightPanelWidth : RIGHT_PANEL_TOGGLE_WIDTH}
+          mapCenter={mapCenter}
         />
       </div>
 
