@@ -14,7 +14,10 @@ esriConfig.apiKey = import.meta.env.VITE_ARCGIS_API_KEY;
 import { defineCustomElements } from '@arcgis/map-components/dist/loader';
 defineCustomElements(window);
 
-import { defineCustomElements as defineCalciteElements } from '@esri/calcite-components/dist/loader';
+import { defineCustomElements as defineCalciteElements } from '@esri/calcite-components/loader';
+// Point Calcite to local assets served from the public folder (avoids CDN dependency)
+import { setAssetPath as setCalciteAssetPath } from '@esri/calcite-components';
+setCalciteAssetPath(`${window.location.origin}${import.meta.env.BASE_URL}`);
 defineCalciteElements(window);
 
 ReactDOM.createRoot(document.getElementById('root')).render(

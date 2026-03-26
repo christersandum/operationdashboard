@@ -67,6 +67,7 @@ export default function Header({
         setDate(dateFmt.format(now));
       } catch {
         setTime(`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} UTC`);
+        setDate(now.toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' }));
       }
     };
     tick();
