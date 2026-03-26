@@ -10,11 +10,14 @@
   "dependencies": {
     "@arcgis/core": "^4.32.0",
     "@arcgis/map-components": "^4.32.0",
+    "@esri/calcite-components": "^3.3.3",
+    "@esri/calcite-components-react": "^3.3.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vite-plugin-static-copy": "^4.0.0"
   }
 }

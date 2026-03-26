@@ -1,3 +1,47 @@
+/* ── Calcite dark theme integration ── */
+:root {
+  color-scheme: dark;
+}
+
+calcite-shell {
+  --calcite-color-background: #1a1d23;
+  --calcite-color-foreground-1: #1e2128;
+  --calcite-color-foreground-2: #242831;
+  --calcite-color-foreground-3: #2a2f3a;
+  --calcite-color-text-1: #e8eaf0;
+  --calcite-color-text-2: #adb5bd;
+  --calcite-color-text-3: #6c7585;
+  --calcite-color-border-1: rgba(255, 255, 255, 0.12);
+  --calcite-color-border-2: rgba(255, 255, 255, 0.08);
+  --calcite-color-brand: #0078d4;
+  --calcite-color-brand-hover: #106ebe;
+  --calcite-color-status-danger: #e74c3c;
+  --calcite-color-status-warning: #f39c12;
+  --calcite-color-status-success: #2ecc71;
+}
+
+/* ensure calcite-shell fills the viewport */
+calcite-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+}
+
+/* The main content area inside CalciteShell (default slot) */
+calcite-shell > div {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Ensure the map area fills available space */
+.map-area {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
 /* ============================================================
    App.css — Operasjonsdashboard (React + ArcGIS)
    ============================================================ */
