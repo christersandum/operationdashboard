@@ -1,4 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import {
+  CalciteShellPanel,
+  CalciteActionBar,
+  CalciteAction,
+  CalcitePanel,
+} from '@esri/calcite-components-react';
 import { wgs84ToUTM33N, utm33NToWGS84 } from '../utils/coordUtils';
 
 // ── Helper: format a WGS84 lat,lng as UTM33 strings for form inputs ──
@@ -88,11 +94,9 @@ export default function RightPanel({
       lat = result.lat;
       lng = result.lng;
     } else if (mapCenter) {
-      // Use current map center as default position
       lng = mapCenter[0];
       lat = mapCenter[1];
     } else {
-      // No location available — use a Norwegian default (central Oslo area)
       lat = 59.913;
       lng = 10.741;
     }
@@ -135,7 +139,6 @@ export default function RightPanel({
       lng = mapCenter[0];
       lat = mapCenter[1];
     } else {
-      // No location available — use a Norwegian default (central Oslo area)
       lat = 59.913;
       lng = 10.741;
     }
@@ -185,27 +188,28 @@ export default function RightPanel({
   };
 
   return (
-    <div className={`right-panel${open ? ' open' : ''}`} style={open && width ? { width: `${width}px` } : undefined}>
-      {/* Toggle tab - always in flow so map never overlaps */}
-      <button className="right-panel-toggle" onClick={onToggle} title={open ? 'Skjul panel' : 'Åpne panel'}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          {open
-            ? <polyline points="9 18 15 12 9 6" />
-            : <polyline points="15 18 9 12 15 6" />}
-        </svg>
-        {!open && <span className="right-panel-toggle-label">Rediger</span>}
-      </button>
+    <CalciteShellPanel
+      slot="panel-end"
+      position="end"
+      displayMode="dock"
+      collapsed={!open || undefined}
+      style={open && width ? { '--calcite-shell-panel-width': `${width}px` } : undefined}
+    >
+      <CalciteActionBar slot="action-bar">
+        <CalciteAction
+          icon={open ? 'chevron-right' : 'pencil'}
+          text="Rediger"
+          onClick={onToggle}
+        />
+      </CalciteActionBar>
 
-      <div className="right-panel-content" style={{ display: open ? 'flex' : 'none' }}>
-          <div className="right-panel-header">
-            <span>Rediger operasjon</span>
-          </div>
-
-          <div className="right-panel-tabs">
+      {open && (
+        <CalcitePanel heading="Rediger operasjon" style={{ height: '100%' }}>
+          <div className="right-panel-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--calcite-color-border-1)', padding: '0 8px' }}>
             {[
-              { id: 'units', label: 'Enheter' },
+              { id: 'units',     label: 'Enheter'   },
               { id: 'incidents', label: 'Hendelser' },
-              { id: 'missions', label: 'Oppdrag' },
+              { id: 'missions',  label: 'Oppdrag'   },
             ].map(t => (
               <button
                 key={t.id}
@@ -217,7 +221,7 @@ export default function RightPanel({
             ))}
           </div>
 
-          <div className="right-panel-body">
+          <div className="right-panel-body" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
             {activeTab === 'units' && (
               <div>
                 <div className="right-panel-section-header">
@@ -385,7 +389,8 @@ export default function RightPanel({
               </div>
             )}
           </div>
-        </div>
-    </div>
+        </CalcitePanel>
+      )}
+    </CalciteShellPanel>
   );
 }

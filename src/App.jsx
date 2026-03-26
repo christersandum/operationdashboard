@@ -4,6 +4,7 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ArcGISMap from './components/ArcGISMap';
 import RightPanel from './components/RightPanel';
+import { CalciteShell, CalciteButton, CalciteDialog } from '@esri/calcite-components-react';
 import {
   OPERATION_CONFIG,
   INCIDENTS_SWORD_STAGED,
@@ -792,7 +793,7 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+    <CalciteShell class="calcite-theme-dark" style={{ height: '100vh' }}>
       <Header
         currentOpId={currentOpId}
         onOperationChange={handleOperationChange}
@@ -814,7 +815,7 @@ export default function App() {
         timingConfig={{ alertInterval }}
       />
 
-      <div className="main-layout">
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         <Sidebar
           opConfig={opConfig}
           units={units}
@@ -831,13 +832,6 @@ export default function App() {
           onTabChange={handleTabChange}
           width={sidebarWidth}
         />
-        {/* Sidebar resize handle */}
-        <div
-          className="panel-resize-handle vertical"
-          onMouseDown={handleSidebarResizeStart}
-          title="Dra for å endre bredde"
-        />
-
         {/* Map area */}
         <div className="map-area">
           <ArcGISMap
@@ -1067,98 +1061,80 @@ export default function App() {
       </div>
 
       {/* Broadcast modal */}
-      {broadcastOpen && (
-        <div className="modal-backdrop" onClick={() => setBroadcastOpen(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">📡 Send kringkastmelding</h3>
-            <textarea
-              className="modal-textarea"
-              placeholder="Skriv din kringkastmelding…"
-              value={broadcastText}
-              onChange={e => setBroadcastText(e.target.value)}
-              autoFocus
-            />
-            <div className="modal-actions">
-              <button className="header-btn" onClick={() => setBroadcastOpen(false)}>Avbryt</button>
-              <button className="header-btn primary" onClick={sendBroadcast}>Send til alle enheter</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CalciteDialog
+        open={broadcastOpen || undefined}
+        heading="Send kringkastmelding"
+        onCalciteDialogClose={() => setBroadcastOpen(false)}
+      >
+        <textarea
+          className="modal-textarea"
+          placeholder="Skriv din kringkastmelding…"
+          value={broadcastText}
+          onChange={e => setBroadcastText(e.target.value)}
+          autoFocus
+        />
+        <CalciteButton slot="footer-end" onClick={sendBroadcast}>Send til alle enheter</CalciteButton>
+        <CalciteButton slot="footer-start" kind="neutral" appearance="outline" onClick={() => setBroadcastOpen(false)}>Avbryt</CalciteButton>
+      </CalciteDialog>
 
-      {/* New Operation dialog */}
-      {newOpDialogOpen && (
-        <div className="modal-backdrop" onClick={() => setNewOpDialogOpen(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">➕ Ny operasjon</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
-              Velg om du vil opprette en tom operasjon eller bruke en eksisterende som mal.
-            </p>
-            <div className="modal-actions" style={{ flexDirection: 'column', gap: '8px' }}>
-              <button
-                className="header-btn primary"
-                style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => {
-                  setNewOpDialogOpen(false);
-                  handleCreateNewOperation();
-                }}
-              >
-                Tom operasjon
-              </button>
-              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                <select
-                  className="operation-select"
-                  style={{ flex: 1 }}
-                  value={newOpTemplateId}
-                  onChange={e => setNewOpTemplateId(e.target.value)}
-                >
-                  <option value="">-- Velg mal --</option>
-                  <option value="nordic-shield">Operation Nordic Shield</option>
-                  <option value="norwegian-sword">Operasjon Norwegian Sword</option>
-                </select>
-                <button
-                  className="header-btn"
-                  disabled={!newOpTemplateId}
-                  style={{ opacity: newOpTemplateId ? 1 : 0.5 }}
-                  onClick={() => {
-                    if (!newOpTemplateId) return;
-                    setNewOpDialogOpen(false);
-                    handleCreateFromTemplate(newOpTemplateId);
-                    setNewOpTemplateId('');
-                  }}
-                >
-                  Bruk som mal
-                </button>
-              </div>
-            </div>
-            <div style={{ marginTop: '8px' }}>
-              <button className="header-btn" onClick={() => setNewOpDialogOpen(false)}>Avbryt</button>
-            </div>
-          </div>
+      {/* New operation dialog */}
+      <CalciteDialog
+        open={newOpDialogOpen || undefined}
+        heading="Ny operasjon"
+        onCalciteDialogClose={() => setNewOpDialogOpen(false)}
+      >
+        <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px', marginBottom: '16px' }}>
+          Velg om du vil opprette en tom operasjon eller bruke en eksisterende som mal.
+        </p>
+        <CalciteButton
+          slot="footer-end"
+          width="full"
+          onClick={() => { setNewOpDialogOpen(false); handleCreateNewOperation(); }}
+        >
+          Tom operasjon
+        </CalciteButton>
+        <div slot="footer-start" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <select
+            className="operation-select"
+            value={newOpTemplateId}
+            onChange={e => setNewOpTemplateId(e.target.value)}
+          >
+            <option value="">-- Velg mal --</option>
+            <option value="nordic-shield">Operation Nordic Shield</option>
+            <option value="norwegian-sword">Operasjon Norwegian Sword</option>
+          </select>
+          <CalciteButton
+            kind="neutral"
+            disabled={!newOpTemplateId || undefined}
+            onClick={() => {
+              if (!newOpTemplateId) return;
+              setNewOpDialogOpen(false);
+              handleCreateFromTemplate(newOpTemplateId);
+              setNewOpTemplateId('');
+            }}
+          >
+            Bruk som mal
+          </CalciteButton>
         </div>
-      )}
+      </CalciteDialog>
 
       {/* Delete confirmation dialog */}
-      {deleteConfirmOpen && (
-        <div className="modal-backdrop" onClick={() => setDeleteConfirmOpen(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title" style={{ color: 'var(--accent-red)' }}>🗑 Slett operasjon</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
-              Er du sikker på at du vil slette/nullstille gjeldende operasjon? All data (enheter, hendelser, oppdrag og AO) vil gå tapt.
-            </p>
-            <div className="modal-actions">
-              <button className="header-btn" onClick={() => setDeleteConfirmOpen(false)}>Avbryt</button>
-              <button
-                className="header-btn"
-                style={{ background: 'rgba(231,76,60,0.15)', color: 'var(--accent-red)', borderColor: 'rgba(231,76,60,0.4)' }}
-                onClick={confirmDeleteOperation}
-              >
-                🗑 Slett permanent
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CalciteDialog
+        open={deleteConfirmOpen || undefined}
+        heading="Slett operasjon"
+        onCalciteDialogClose={() => setDeleteConfirmOpen(false)}
+        kind="danger"
+      >
+        <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px' }}>
+          Er du sikker på at du vil slette/nullstille gjeldende operasjon? All data (enheter, hendelser, oppdrag og AO) vil gå tapt.
+        </p>
+        <CalciteButton slot="footer-end" kind="danger" onClick={confirmDeleteOperation}>
+          🗑 Slett permanent
+        </CalciteButton>
+        <CalciteButton slot="footer-start" kind="neutral" appearance="outline" onClick={() => setDeleteConfirmOpen(false)}>
+          Avbryt
+        </CalciteButton>
+      </CalciteDialog>
 
       {(layerPanelOpen || basemapSelectorOpen) && (
         <div
@@ -1166,6 +1142,6 @@ export default function App() {
           onClick={() => { setLayerPanelOpen(false); setBasemapSelectorOpen(false); }}
         />
       )}
-    </div>
+    </CalciteShell>
   );
 }
