@@ -94,9 +94,11 @@ export default function RightPanel({
       lat = result.lat;
       lng = result.lng;
     } else if (mapCenter) {
+      // Use current map center as default position
       lng = mapCenter[0];
       lat = mapCenter[1];
     } else {
+      // No location available — use a Norwegian default (central Oslo area)
       lat = 59.913;
       lng = 10.741;
     }
@@ -136,9 +138,11 @@ export default function RightPanel({
       lat = result.lat;
       lng = result.lng;
     } else if (mapCenter) {
+      // Use current map center as default position
       lng = mapCenter[0];
       lat = mapCenter[1];
     } else {
+      // No location available — use a Norwegian default (central Oslo area)
       lat = 59.913;
       lng = 10.741;
     }

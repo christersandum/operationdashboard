@@ -171,7 +171,6 @@ export default function Header({
               ref={fileInputRef}
               type="file"
               accept=".json"
-              aria-label="Last inn operasjonsfil"
               style={{ display: 'none' }}
               onChange={(e) => { onLoadOperation && onLoadOperation(e); }}
             />
