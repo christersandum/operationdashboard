@@ -6,10 +6,6 @@ import App from './App';
 import '@arcgis/core/assets/esri/themes/dark/main.css';
 import '@esri/calcite-components/dist/calcite/calcite.css';
 
-// ArcGIS API key — enables basemaps (fallback for non-authenticated access)
-import esriConfig from '@arcgis/core/config';
-esriConfig.apiKey = import.meta.env.VITE_ARCGIS_API_KEY;
-
 // OAuth 2.0 — redirect flow to beredskap.maps.arcgis.com
 import OAuthInfo from '@arcgis/core/identity/OAuthInfo';
 import IdentityManager from '@arcgis/core/identity/IdentityManager';
