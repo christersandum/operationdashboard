@@ -4,15 +4,23 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ArcGISMap from './components/ArcGISMap';
 import RightPanel from './components/RightPanel';
-import { CalciteShell, CalciteButton, CalciteDialog } from '@esri/calcite-components-react';
+import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel } from '@esri/calcite-components-react';
 import {
   OPERATION_CONFIG,
   INCIDENTS_SWORD_STAGED,
   MISSIONS_SWORD_STAGED,
   INCIDENT_COLORS,
   BASEMAP_OPTIONS,
+  FEATURE_SERVICE_URLS,
 } from './data';
 import { formatUTM33 } from './utils/coordUtils';
+import { ensureOpsServices, getPortalUser } from './utils/portalService';
+import {
+  saveOperation,
+  listOperations,
+  loadOperation as loadOperationFromService,
+  operationExistsInLayer,
+} from './utils/featureServiceSync';
 
 const UNIT_MOVE_SPEED  = 0.004;
 const UNIT_RANDOM_STEP = 0.003;
@@ -84,6 +92,20 @@ export default function App() {
   const [basemapSelectorOpen, setBasemapSelectorOpen] = useState(false);
   const [pickingLocation, setPickingLocation] = useState(null); // null | 'unit' | 'incident'
   const [pickedLocation, setPickedLocation] = useState(null);   // { lat, lng, utm }
+
+  // ArcGIS Online user info and service URLs
+  const [portalUser, setPortalUser] = useState(null);
+  const [serviceUrls, setServiceUrls] = useState({ ...FEATURE_SERVICE_URLS });
+  const serviceUrlsRef = useRef({ ...FEATURE_SERVICE_URLS });
+
+  // Save / Load dialogs
+  const [saveConfirmOpen, setSaveConfirmOpen]   = useState(false);
+  const [savePendingData, setSavePendingData]   = useState(null);
+  const [loadDialogOpen, setLoadDialogOpen]     = useState(false);
+  const [availableOps,   setAvailableOps]       = useState([]);
+
+  // New operation name input
+  const [newOpName, setNewOpName] = useState('');
 
   // Resize refs
   const sidebarResizeRef   = useRef(null);
@@ -428,10 +450,6 @@ export default function App() {
     alertIntervalRef.current = setInterval(() => {
       if (!isPlayingRef.current) return;
       const messages = [
-        '⚠ Automatisk statussjekk — alle enheter rapporterer inn.',
-        '📡 Signaloppdatering mottatt fra feltstyrker.',
-        '🔔 Periodisk varsel: kontroller oppdragsstatus.',
-        '⚡ Ressursgjennomgang: vurder omtildeling av ledige enheter.',
         '📋 Oppdragslogg oppdatert — se operasjonsoversikten.',
       ];
       const text = messages[Math.floor(Math.random() * messages.length)];
@@ -442,6 +460,19 @@ export default function App() {
   useEffect(() => {
     loadOperation('norwegian-sword');
     startAlertInterval(10);
+
+    // Fetch portal user info and ensure Feature Services exist
+    getPortalUser()
+      .then(user => setPortalUser(user))
+      .catch(err => console.warn('[App] Could not fetch portal user:', err));
+
+    ensureOpsServices()
+      .then(({ urls }) => {
+        serviceUrlsRef.current = urls;
+        setServiceUrls(urls);
+      })
+      .catch(err => console.warn('[App] Could not initialise ArcGIS Online services:', err));
+
     return () => {
       simTimers.current.forEach(clearTimeout);
       if (moveInterval.current) clearInterval(moveInterval.current);
@@ -612,95 +643,178 @@ export default function App() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSaveOperation = useCallback(() => {
+  const handleSaveOperation = useCallback(async () => {
     const cfg = OPERATION_CONFIG[currentOpId];
-    const opData = {
-      id: currentOpId,
-      name: cfg.name,
-      center: cfg.center,
-      zoom: cfg.zoom,
-      aoCoords: currentAoCoords || cfg.aoCoords,
-      aoLabel: cfg.aoLabel,
-      units: unitsRef.current,
-      incidents: incidentsRef.current,
-      missions: missionsRef.current,
-      staged: false,
-      stats: stats,
-      alerts: cfg.alerts,
-      commander: cfg.commander,
-      aoCenter: cfg.aoCenter,
-      progress: cfg.progress || 0,
-      elapsed: cfg.elapsed || 0,
-      chat: chatHistory,
-    };
-    const json = JSON.stringify(opData, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `operasjon-${currentOpId}-${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [currentOpId, stats, chatHistory, currentAoCoords]);
+    const urls = serviceUrlsRef.current;
 
-  const handleLoadOperation = useCallback((e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const opData = JSON.parse(ev.target.result);
-        simTimers.current.forEach(clearTimeout);
-        simTimers.current = [];
-        if (moveInterval.current) clearInterval(moveInterval.current);
-        if (progressInterval.current) clearInterval(progressInterval.current);
-        const freshUnits = (opData.units || []).map(u => ({ ...u, target: null, signal: u.signal ?? 4 }));
-        unitsRef.current = freshUnits;
-        setUnits([...freshUnits]);
-        const freshIncidents = opData.incidents || [];
-        incidentsRef.current = freshIncidents;
-        setIncidents([...freshIncidents]);
-        const freshMissions = opData.missions || [];
-        missionsRef.current = freshMissions;
-        setMissions([...freshMissions]);
-        arrivedRef.current = new Set();
-        const freshChat = (opData.chat || []).map((m, i) => ({ ...m, id: i }));
-        chatIdRef.current = freshChat.length + 1;
-        setChatHistory([...freshChat]);
-        if (opData.stats) setStats(opData.stats);
-        if (opData.center) { setMapCenter(opData.center); setMapZoom(opData.zoom || 12); }
-        if (opData.aoCoords) setCurrentAoCoords(opData.aoCoords);
-        setScenarioEnded(false);
-        setIsPlaying(true);
-        isPlayingRef.current = true;
-        moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
-        addSystemChat(`📂 Operasjon lastet fra fil: ${file.name}`, '#2ecc71');
-      } catch (err) {
-        console.error('Failed to load operation:', err);
-      }
+    // Build the operation data object
+    const opData = {
+      operationId:   currentOpId,
+      operationName: cfg.name,
+      center:        cfg.center,
+      zoom:          cfg.zoom,
+      aoCoords:      currentAoCoords || cfg.aoCoords,
+      aoLabel:       cfg.aoLabel,
+      units:         unitsRef.current,
+      incidents:     incidentsRef.current,
+      missions:      missionsRef.current,
+      staged:        false,
+      stats,
+      alerts:        cfg.alerts,
+      commander:     cfg.commander,
+      aoCenter:      cfg.aoCenter,
+      progress:      cfg.progress || 0,
+      elapsed:       cfg.elapsed || 0,
+      chat:          chatHistory,
     };
-    reader.readAsText(file);
-    e.target.value = '';
+
+    // If Feature Services are not available, fall back to JSON download
+    if (!urls.units) {
+      const json = JSON.stringify(opData, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `operasjon-${currentOpId}-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // Check if operation already exists in ArcGIS Online
+    try {
+      const exists = await operationExistsInLayer(urls.operations, currentOpId);
+      if (exists) {
+        // Show overwrite confirmation dialog
+        setSavePendingData(opData);
+        setSaveConfirmOpen(true);
+        return;
+      }
+    } catch (err) {
+      console.warn('[App] Could not check existing operation:', err);
+    }
+
+    // Save directly (new operation)
+    await doSaveToArcGIS(opData, false);
+  }, [currentOpId, stats, chatHistory, currentAoCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doSaveToArcGIS = useCallback(async (opData, overwrite) => {
+    const urls = serviceUrlsRef.current;
+    addSystemChat('☁ Lagrer til ArcGIS Online…', '#0078d4');
+    try {
+      await saveOperation(urls, opData, overwrite);
+      addSystemChat('✅ Operasjon lagret til ArcGIS Online.', '#2ecc71');
+    } catch (err) {
+      console.error('[App] Save to ArcGIS failed:', err);
+      addSystemChat(`❌ Lagring feilet: ${err.message}`, '#e74c3c');
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCreateNewOperation = useCallback(() => {
+  const handleLoadOperation = useCallback(async () => {
+    const urls = serviceUrlsRef.current;
+
+    // If Feature Services are not available, open file picker as fallback
+    if (!urls.operations) {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.json';
+      fileInput.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const opData = JSON.parse(ev.target.result);
+            applyLoadedOperation(opData, file.name);
+          } catch (err) {
+            console.error('Failed to load operation:', err);
+          }
+        };
+        reader.readAsText(file);
+      };
+      fileInput.click();
+      return;
+    }
+
+    // Load available operations from ArcGIS Online
+    try {
+      const ops = await listOperations(urls.operations);
+      setAvailableOps(ops);
+      setLoadDialogOpen(true);
+    } catch (err) {
+      console.error('[App] Could not list operations:', err);
+      addSystemChat(`❌ Kunne ikke laste operasjonsliste: ${err.message}`, '#e74c3c');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSelectAndLoadOperation = useCallback(async (operationId) => {
+    setLoadDialogOpen(false);
+    const urls = serviceUrlsRef.current;
+    addSystemChat('☁ Laster operasjon fra ArcGIS Online…', '#0078d4');
+    try {
+      const { units, incidents, missions, ao, meta } = await loadOperationFromService(urls, operationId);
+      applyLoadedOperation({
+        units,
+        incidents,
+        missions,
+        aoCoords: ao?.aoCoords,
+        aoLabel:  ao?.aoLabel,
+        stats:    meta?.stats,
+        center:   meta?.center,
+        zoom:     meta?.zoom,
+        chat:     meta?.chat,
+      }, meta?.operationName || operationId);
+      addSystemChat(`✅ Operasjon "${meta?.operationName || operationId}" lastet fra ArcGIS Online.`, '#2ecc71');
+    } catch (err) {
+      console.error('[App] Load from ArcGIS failed:', err);
+      addSystemChat(`❌ Lasting feilet: ${err.message}`, '#e74c3c');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyLoadedOperation(opData, label) {
     simTimers.current.forEach(clearTimeout);
     simTimers.current = [];
     if (moveInterval.current) clearInterval(moveInterval.current);
-    const newUnits = [];
-    const newIncidents = [];
-    const newMissions = [];
-    unitsRef.current = newUnits;
-    incidentsRef.current = newIncidents;
-    missionsRef.current = newMissions;
+    if (progressInterval.current) clearInterval(progressInterval.current);
+    const freshUnits = (opData.units || []).map(u => ({ ...u, target: null, signal: u.signal ?? 4 }));
+    unitsRef.current = freshUnits;
+    setUnits([...freshUnits]);
+    const freshIncidents = opData.incidents || [];
+    incidentsRef.current = freshIncidents;
+    setIncidents([...freshIncidents]);
+    const freshMissions = opData.missions || [];
+    missionsRef.current = freshMissions;
+    setMissions([...freshMissions]);
+    arrivedRef.current = new Set();
+    const freshChat = (opData.chat || []).map((m, i) => ({ ...m, id: i }));
+    chatIdRef.current = freshChat.length + 1;
+    setChatHistory([...freshChat]);
+    if (opData.stats) setStats(opData.stats);
+    if (opData.center) { setMapCenter(opData.center); setMapZoom(opData.zoom || 12); }
+    if (opData.aoCoords) setCurrentAoCoords(opData.aoCoords);
+    setScenarioEnded(false);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+    addSystemChat(`📂 Operasjon lastet: ${label}`, '#2ecc71');
+  }
+
+  const handleCreateNewOperation = useCallback((opName) => {
+    simTimers.current.forEach(clearTimeout);
+    simTimers.current = [];
+    if (moveInterval.current) clearInterval(moveInterval.current);
+    unitsRef.current = [];
+    incidentsRef.current = [];
+    missionsRef.current = [];
     arrivedRef.current = new Set();
     setUnits([]);
     setIncidents([]);
     setMissions([]);
     chatIdRef.current = 2;
-    setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: 'Ny operasjon opprettet. Legg til enheter og hendelser.' }]);
+    const displayName = opName || 'Ny operasjon';
+    setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: `${displayName} opprettet. Legg til enheter og hendelser.` }]);
     setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
     setScenarioEnded(false);
     setIsPlaying(true);
@@ -813,6 +927,7 @@ export default function App() {
           }
         }}
         timingConfig={{ alertInterval }}
+        portalUser={portalUser}
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
@@ -1081,15 +1196,31 @@ export default function App() {
       <CalciteDialog
         open={newOpDialogOpen || undefined}
         heading="Ny operasjon"
-        onCalciteDialogClose={() => setNewOpDialogOpen(false)}
+        onCalciteDialogClose={() => { setNewOpDialogOpen(false); setNewOpName(''); }}
       >
-        <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px', marginBottom: '16px' }}>
+        <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px', marginBottom: '12px' }}>
           Velg om du vil opprette en tom operasjon eller bruke en eksisterende som mal.
         </p>
+        <div style={{ marginBottom: '16px' }}>
+          <CalciteLabel>
+            Operasjonsnavn (påkrevd)
+            <CalciteInput
+              placeholder="Skriv inn operasjonsnavn…"
+              value={newOpName}
+              onCalciteInputInput={e => setNewOpName(e.target.value)}
+            />
+          </CalciteLabel>
+        </div>
         <CalciteButton
           slot="footer-end"
           width="full"
-          onClick={() => { setNewOpDialogOpen(false); handleCreateNewOperation(); }}
+          disabled={!newOpName.trim() || undefined}
+          onClick={() => {
+            if (!newOpName.trim()) return;
+            setNewOpDialogOpen(false);
+            handleCreateNewOperation(newOpName.trim());
+            setNewOpName('');
+          }}
         >
           Tom operasjon
         </CalciteButton>
@@ -1105,17 +1236,84 @@ export default function App() {
           </select>
           <CalciteButton
             kind="neutral"
-            disabled={!newOpTemplateId || undefined}
+            disabled={!newOpTemplateId || !newOpName.trim() || undefined}
             onClick={() => {
-              if (!newOpTemplateId) return;
+              if (!newOpTemplateId || !newOpName.trim()) return;
               setNewOpDialogOpen(false);
               handleCreateFromTemplate(newOpTemplateId);
               setNewOpTemplateId('');
+              setNewOpName('');
             }}
           >
             Bruk som mal
           </CalciteButton>
         </div>
+      </CalciteDialog>
+
+      {/* Save overwrite confirmation dialog */}
+      <CalciteDialog
+        open={saveConfirmOpen || undefined}
+        heading="Operasjon finnes allerede"
+        onCalciteDialogClose={() => { setSaveConfirmOpen(false); setSavePendingData(null); }}
+      >
+        <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px' }}>
+          Operasjonen finnes allerede i ArcGIS Online. Vil du overskrive?
+        </p>
+        <CalciteButton
+          slot="footer-end"
+          kind="danger"
+          onClick={() => {
+            setSaveConfirmOpen(false);
+            const data = savePendingData;
+            setSavePendingData(null);
+            if (data) doSaveToArcGIS(data, true);
+          }}
+        >
+          Overskriv
+        </CalciteButton>
+        <CalciteButton
+          slot="footer-start"
+          kind="neutral"
+          appearance="outline"
+          onClick={() => { setSaveConfirmOpen(false); setSavePendingData(null); }}
+        >
+          Avbryt
+        </CalciteButton>
+      </CalciteDialog>
+
+      {/* Load operation dialog */}
+      <CalciteDialog
+        open={loadDialogOpen || undefined}
+        heading="Last inn operasjon fra ArcGIS Online"
+        onCalciteDialogClose={() => setLoadDialogOpen(false)}
+      >
+        {availableOps.length === 0 ? (
+          <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px' }}>
+            Ingen lagrede operasjoner funnet i ArcGIS Online.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {availableOps.map(op => (
+              <CalciteButton
+                key={op.id}
+                kind="neutral"
+                appearance="outline"
+                width="full"
+                onClick={() => handleSelectAndLoadOperation(op.id)}
+              >
+                {op.name || op.id}
+              </CalciteButton>
+            ))}
+          </div>
+        )}
+        <CalciteButton
+          slot="footer-start"
+          kind="neutral"
+          appearance="outline"
+          onClick={() => setLoadDialogOpen(false)}
+        >
+          Avbryt
+        </CalciteButton>
       </CalciteDialog>
 
       {/* Delete confirmation dialog */}

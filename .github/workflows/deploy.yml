@@ -36,6 +36,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_ARCGIS_API_KEY: ${{ secrets.VITE_ARCGIS_API_KEY }}
+          VITE_ARCGIS_APP_ID: ${{ secrets.VITE_ARCGIS_APP_ID }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
