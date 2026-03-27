@@ -34,6 +34,7 @@ export default function Header({
   drawAOMode,
   onSettingsChange,
   timingConfig,
+  portalUser,
 }) {
   const pad = n => String(n).padStart(2, '0');
   const [time, setTime]     = useState('--:--:--');
@@ -41,7 +42,6 @@ export default function Header({
   const [timezone, setTimezone] = useState('UTC');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef  = useRef(null);
-  const fileInputRef = useRef(null);
 
   const defaultSettings = {
     firstDelay: 15, interval: 30, travelTime: 35, bankChatDuration: 30, alertInterval: 10,
@@ -165,16 +165,9 @@ export default function Header({
             <CalciteDropdownItem iconStart="save" onCalciteDropdownItemSelect={() => onSaveOperation && onSaveOperation()}>
               Lagre operasjon
             </CalciteDropdownItem>
-            <CalciteDropdownItem iconStart="folder-open" onCalciteDropdownItemSelect={() => fileInputRef.current?.click()}>
+            <CalciteDropdownItem iconStart="folder-open" onCalciteDropdownItemSelect={() => onLoadOperation && onLoadOperation()}>
               Last inn operasjon
             </CalciteDropdownItem>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              style={{ display: 'none' }}
-              onChange={(e) => { onLoadOperation && onLoadOperation(e); }}
-            />
           </CalciteDropdownGroup>
           <CalciteDropdownGroup>
             <CalciteDropdownItem iconStart="plus" onCalciteDropdownItemSelect={() => onNewOperation && onNewOperation()}>
@@ -260,8 +253,8 @@ export default function Header({
 
       <CalciteNavigationUser
         slot="user"
-        fullName="Admin Bruker"
-        username="Operasjonskoordinator"
+        fullName={portalUser?.fullName || 'Admin Bruker'}
+        username={portalUser?.username || 'Operasjonskoordinator'}
         thumbnail="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%230078d4'/%3E%3Ctext x='16' y='21' text-anchor='middle' fill='white' font-size='14' font-weight='bold'%3EAU%3C/text%3E%3C/svg%3E"
       />
     </CalciteNavigation>

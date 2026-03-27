@@ -6,9 +6,23 @@ import App from './App';
 import '@arcgis/core/assets/esri/themes/dark/main.css';
 import '@esri/calcite-components/dist/calcite/calcite.css';
 
-// ArcGIS API key — enables ArcGIS Online basemaps and services
+// ArcGIS API key — enables basemaps (fallback for non-authenticated access)
 import esriConfig from '@arcgis/core/config';
 esriConfig.apiKey = import.meta.env.VITE_ARCGIS_API_KEY;
+
+// OAuth 2.0 — redirect flow to beredskap.maps.arcgis.com
+import OAuthInfo from '@arcgis/core/identity/OAuthInfo';
+import IdentityManager from '@arcgis/core/identity/IdentityManager';
+
+const oauthInfo = new OAuthInfo({
+  appId: import.meta.env.VITE_ARCGIS_APP_ID,
+  portalUrl: 'https://beredskap.maps.arcgis.com',
+  popup: false,
+});
+IdentityManager.registerOAuthInfos([oauthInfo]);
+
+// Trigger login immediately — user must be signed in before the app loads
+IdentityManager.getCredential('https://beredskap.maps.arcgis.com/sharing/rest');
 
 // ArcGIS map-components loader
 import { defineCustomElements } from '@arcgis/map-components/dist/loader';

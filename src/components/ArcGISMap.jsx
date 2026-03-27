@@ -10,7 +10,7 @@ import Point from '@arcgis/core/geometry/Point';
 import Polygon from '@arcgis/core/geometry/Polygon';
 import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol';
 import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
-import SimpleMarkerSymbol from '@arcgis/core/symbols/SimpleMarkerSymbol';
+import CIMSymbol from '@arcgis/core/symbols/CIMSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
 import PortalItem from '@arcgis/core/portal/PortalItem';
@@ -18,7 +18,6 @@ import {
   LIGHT_BASEMAP_URL,
   DARK_BASEMAP_URL,
   BASEMAP_OPTIONS,
-  INCIDENT_COLORS,
   SKOLER_BARNEHAGER_URL,
   SEARCH_LOCATOR_ITEM_ID,
   SEARCH_PORTAL_URL,
@@ -263,18 +262,16 @@ export default function ArcGISMap({
     const existingIds = new Set(Object.keys(unitGraphicsRef.current));
 
     units.forEach(unit => {
-      const color = getUnitColor(unit);
-      const statusColor = getStatusColor(unit.status);
       const pt = new Point({ longitude: unit.lng, latitude: unit.lat, spatialReference: { wkid: 4326 } });
 
       if (unitGraphicsRef.current[unit.id]) {
         const g = unitGraphicsRef.current[unit.id];
         g.geometry = pt;
-        g.symbol   = makeUnitSymbol(color, statusColor);
+        g.symbol   = makeUnitCIMSymbol(unit);
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeUnitSymbol(color, statusColor),
+          symbol: makeUnitCIMSymbol(unit),
           attributes: { ...unit },
           popupTemplate: makeUnitPopupTemplate(unit),
         });
@@ -298,15 +295,16 @@ export default function ArcGISMap({
     const existingIds = new Set(Object.keys(incidentGraphicsRef.current));
 
     incidents.forEach(inc => {
-      const priorityColor = getPriorityColor(inc.priority);
       const pt = new Point({ longitude: inc.lng, latitude: inc.lat, spatialReference: { wkid: 4326 } });
 
       if (incidentGraphicsRef.current[inc.id]) {
-        incidentGraphicsRef.current[inc.id].geometry = pt;
+        const g = incidentGraphicsRef.current[inc.id];
+        g.geometry = pt;
+        g.symbol   = makeIncidentCIMSymbol(inc);
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeIncidentSymbol(priorityColor),
+          symbol: makeIncidentCIMSymbol(inc),
           attributes: { ...inc },
           popupTemplate: makeIncidentPopupTemplate(inc),
         });
@@ -342,11 +340,11 @@ export default function ArcGISMap({
       if (missionGraphicsRef.current[mission.id]) {
         const g = missionGraphicsRef.current[mission.id];
         g.geometry = pt;
-        g.symbol = makeMissionSymbol(completed);
+        g.symbol = makeMissionCIMSymbol(completed);
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeMissionSymbol(completed),
+          symbol: makeMissionCIMSymbol(completed),
           attributes: { ...mission },
           popupTemplate: new PopupTemplate({
             title: `📋 ${mission.title}`,
@@ -376,56 +374,222 @@ export default function ArcGISMap({
 
 // ── Helpers ────────────────────────────────────────────────
 
-function getPriorityColor(priority) {
-  if (priority === 'alarm')  return [220, 20, 60];
-  if (priority === 'high')   return [231, 76, 60];
-  if (priority === 'medium') return [243, 156, 18];
-  return [46, 204, 113];
+// ── Role → emoji mapping ───────────────────────────────────
+const ROLE_EMOJI = {
+  'Politipatrulje':   '🚓',
+  'Beredskapstropp':  '🦅',
+  'Taktisk team':     '🎯',
+  'Kommandopost':     '📡',
+  'Medisinsk enhet':  '🏥',
+  'Utrykkingsenhet':  '🚑',
+  'Etterretning':     '🔍',
+  'Rekognosering':    '🔭',
+  'Infanterienhet':   '🪖',
+  'Støtteenhet':      '🪖',
+  'EOD-team':         '💣',
+  'EOD-støtte':       '💣',
+  'Logistikk':        '🚚',
+  'Flyliaison':       '🚁',
+  'Flystøtte':        '🚁',
+};
+
+// ── Build a circle ring for CIMSymbol background ──────────
+function buildCircleRing(radius, steps = 16) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = (i / steps) * 2 * Math.PI;
+    pts.push([radius * Math.cos(angle), radius * Math.sin(angle)]);
+  }
+  return pts;
 }
 
-function getUnitColor(unit) {
-  if (!unit.assignedIncident) return [107, 114, 128];
-  const idx = unit.incidentColorIndex ?? 0;
-  const hex = INCIDENT_COLORS[idx % INCIDENT_COLORS.length];
-  return hexToRgb(hex);
-}
+// ── Pre-computed geometry constants ───────────────────────
+const INCIDENT_SQUARE_RING = [[-11, -11], [11, -11], [11, 11], [-11, 11], [-11, -11]];
+const MISSION_SQUARE_RING  = [[-7, -7],  [7, -7],  [7, 7],  [-7, 7],  [-7, -7]];
 
-function getStatusColor(status) {
-  if (status === 'ledig' || status === 'online') return [46, 204, 113];
-  if (status === 'opptatt') return [243, 156, 18];
-  if (status === 'warning') return [243, 156, 18];
-  return [107, 114, 128];
-}
-
-function makeUnitSymbol(color, statusColor) {
-  return new SimpleMarkerSymbol({
-    style: 'circle',
-    color: [...color, 220],
-    size: 18,
-    outline: {
-      color: [...statusColor, 255],
-      width: 2.5,
+// ── CIMSymbol for units ────────────────────────────────────
+function makeUnitCIMSymbol(unit) {
+  const emoji = ROLE_EMOJI[unit.role] || '🪖';
+  const statusColor = getStatusColorRgba(unit.status);
+  return new CIMSymbol({
+    data: {
+      type: 'CIMSymbolReference',
+      symbol: {
+        type: 'CIMPointSymbol',
+        symbolLayers: [
+          // Background circle
+          {
+            type: 'CIMVectorMarker',
+            enable: true,
+            anchorPoint: { x: 0, y: 0 },
+            anchorPointUnits: 'Relative',
+            size: 24,
+            frame: { xmin: -12, ymin: -12, xmax: 12, ymax: 12 },
+            markerGraphics: [{
+              type: 'CIMMarkerGraphic',
+              geometry: { rings: [buildCircleRing(12)] },
+              symbol: {
+                type: 'CIMPolygonSymbol',
+                symbolLayers: [
+                  { type: 'CIMSolidFill',   enable: true, color: statusColor },
+                  { type: 'CIMSolidStroke', enable: true, color: [255, 255, 255, 200], width: 1.5 },
+                ],
+              },
+            }],
+          },
+          // Emoji text
+          {
+            type: 'CIMVectorMarker',
+            enable: true,
+            anchorPoint: { x: 0, y: 0 },
+            anchorPointUnits: 'Relative',
+            size: 14,
+            frame: { xmin: -7, ymin: -7, xmax: 7, ymax: 7 },
+            markerGraphics: [{
+              type: 'CIMMarkerGraphic',
+              geometry: { x: 0, y: 0 },
+              symbol: {
+                type: 'CIMTextSymbol',
+                fontFamilyName: 'Segoe UI Emoji',
+                height: 12,
+                horizontalAlignment: 'Center',
+                verticalAlignment: 'Center',
+                symbol: { type: 'CIMPolygonSymbol', symbolLayers: [] },
+              },
+              textString: emoji,
+            }],
+          },
+        ],
+      },
     },
   });
 }
 
-function makeIncidentSymbol(color) {
-  return new SimpleMarkerSymbol({
-    style: 'square',
-    color: [...color, 60],
-    size: 22,
-    outline: { color: [...color, 220], width: 2 },
+// ── CIMSymbol for incidents ────────────────────────────────
+function makeIncidentCIMSymbol(inc) {
+  const emoji = inc.icon || '❗';
+  const color = getPriorityColorRgba(inc.priority);
+  return new CIMSymbol({
+    data: {
+      type: 'CIMSymbolReference',
+      symbol: {
+        type: 'CIMPointSymbol',
+        symbolLayers: [
+          // Background square
+          {
+            type: 'CIMVectorMarker',
+            enable: true,
+            anchorPoint: { x: 0, y: 0 },
+            anchorPointUnits: 'Relative',
+            size: 24,
+            frame: { xmin: -12, ymin: -12, xmax: 12, ymax: 12 },
+            markerGraphics: [{
+              type: 'CIMMarkerGraphic',
+              geometry: { rings: [INCIDENT_SQUARE_RING] },
+              symbol: {
+                type: 'CIMPolygonSymbol',
+                symbolLayers: [
+                  { type: 'CIMSolidFill',   enable: true, color },
+                  { type: 'CIMSolidStroke', enable: true, color: [255, 255, 255, 200], width: 1.5 },
+                ],
+              },
+            }],
+          },
+          // Emoji text
+          {
+            type: 'CIMVectorMarker',
+            enable: true,
+            anchorPoint: { x: 0, y: 0 },
+            anchorPointUnits: 'Relative',
+            size: 14,
+            frame: { xmin: -7, ymin: -7, xmax: 7, ymax: 7 },
+            markerGraphics: [{
+              type: 'CIMMarkerGraphic',
+              geometry: { x: 0, y: 0 },
+              symbol: {
+                type: 'CIMTextSymbol',
+                fontFamilyName: 'Segoe UI Emoji',
+                height: 12,
+                horizontalAlignment: 'Center',
+                verticalAlignment: 'Center',
+                symbol: { type: 'CIMPolygonSymbol', symbolLayers: [] },
+              },
+              textString: emoji,
+            }],
+          },
+        ],
+      },
+    },
   });
 }
 
-function makeMissionSymbol(completed) {
-  const color = completed ? [46, 204, 113] : [231, 76, 60];
-  return new SimpleMarkerSymbol({
-    style: 'square',
-    color: [...color, 180],
-    size: 12,
-    outline: { color: [...color, 255], width: 1.5 },
+// ── CIMSymbol for missions ─────────────────────────────────
+function makeMissionCIMSymbol(completed) {
+  const color = completed ? [46, 204, 113, 200] : [231, 76, 60, 200];
+  return new CIMSymbol({
+    data: {
+      type: 'CIMSymbolReference',
+      symbol: {
+        type: 'CIMPointSymbol',
+        symbolLayers: [
+          {
+            type: 'CIMVectorMarker',
+            enable: true,
+            anchorPoint: { x: 0, y: 0 },
+            anchorPointUnits: 'Relative',
+            size: 14,
+            frame: { xmin: -7, ymin: -7, xmax: 7, ymax: 7 },
+            markerGraphics: [{
+              type: 'CIMMarkerGraphic',
+              geometry: { rings: [MISSION_SQUARE_RING] },
+              symbol: {
+                type: 'CIMPolygonSymbol',
+                symbolLayers: [
+                  { type: 'CIMSolidFill',   enable: true, color },
+                  { type: 'CIMSolidStroke', enable: true, color: [255, 255, 255, 200], width: 1 },
+                ],
+              },
+            }],
+          },
+          {
+            type: 'CIMVectorMarker',
+            enable: true,
+            anchorPoint: { x: 0, y: 0 },
+            anchorPointUnits: 'Relative',
+            size: 10,
+            frame: { xmin: -5, ymin: -5, xmax: 5, ymax: 5 },
+            markerGraphics: [{
+              type: 'CIMMarkerGraphic',
+              geometry: { x: 0, y: 0 },
+              symbol: {
+                type: 'CIMTextSymbol',
+                fontFamilyName: 'Segoe UI Emoji',
+                height: 9,
+                horizontalAlignment: 'Center',
+                verticalAlignment: 'Center',
+                symbol: { type: 'CIMPolygonSymbol', symbolLayers: [] },
+              },
+              textString: '📋',
+            }],
+          },
+        ],
+      },
+    },
   });
+}
+
+function getStatusColorRgba(status) {
+  if (status === 'ledig' || status === 'online') return [46, 204, 113, 220];
+  if (status === 'opptatt') return [243, 156, 18, 220];
+  if (status === 'warning') return [243, 156, 18, 220];
+  return [107, 114, 128, 220];
+}
+
+function getPriorityColorRgba(priority) {
+  if (priority === 'alarm')  return [220, 20, 60, 200];
+  if (priority === 'high')   return [231, 76, 60, 200];
+  if (priority === 'medium') return [243, 156, 18, 200];
+  return [46, 204, 113, 200];
 }
 
 function makeUnitPopupTemplate(unit) {
@@ -458,11 +622,4 @@ function makeIncidentPopupTemplate(inc) {
         <tr><td colspan="2" style="color:#9aa3b5; padding-top:4px">${inc.desc}</td></tr>
       </table>`,
   });
-}
-
-function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
 }

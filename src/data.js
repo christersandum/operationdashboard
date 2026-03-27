@@ -2,6 +2,22 @@
    data.js — Static operation data
    ============================================================ */
 
+// ── ArcGIS Online portal configuration ──────────────────────
+export const PORTAL_URL = 'https://beredskap.maps.arcgis.com';
+export const OPS_FOLDER_NAME = 'OPS';
+
+// ── Feature Service URLs — set after creation via portalService.js ──
+// These are populated at runtime; placeholder values here for documentation.
+export const FEATURE_SERVICE_URLS = {
+  units:      null, // 'https://services.arcgis.com/ORG_ID/arcgis/rest/services/OPS_Units/FeatureServer/0'
+  incidents:  null, // 'https://services.arcgis.com/ORG_ID/arcgis/rest/services/OPS_Incidents/FeatureServer/0'
+  missions:   null, // 'https://services.arcgis.com/ORG_ID/arcgis/rest/services/OPS_Missions/FeatureServer/0'
+  ao:         null, // 'https://services.arcgis.com/ORG_ID/arcgis/rest/services/OPS_AO/FeatureServer/0'
+  operations: null, // 'https://services.arcgis.com/ORG_ID/arcgis/rest/services/OPS_Operations/FeatureServer/0'
+};
+
+export const WEBMAP_ITEM_TITLE = 'OPSMAP';
+
 export const LIGHT_BASEMAP_URL =
   'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer';
 export const DARK_BASEMAP_URL =
