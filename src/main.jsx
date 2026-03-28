@@ -6,6 +6,23 @@ import App from './App';
 import '@arcgis/core/assets/esri/themes/dark/main.css';
 import '@esri/calcite-components/dist/calcite/calcite.css';
 
+// Register OAuth 2.0 app so IdentityManager uses the OAuth redirect flow
+import IdentityManager from '@arcgis/core/identity/IdentityManager';
+import OAuthInfo from '@arcgis/core/identity/OAuthInfo';
+import { PORTAL_URL } from './data';
+
+const appId = import.meta.env.VITE_ARCGIS_APP_ID;
+if (appId) {
+  const oAuthInfo = new OAuthInfo({
+    appId,
+    portalUrl: PORTAL_URL,
+    popup: false, // full-page redirect (not popup)
+  });
+  IdentityManager.registerOAuthInfos([oAuthInfo]);
+} else {
+  console.warn('[main] VITE_ARCGIS_APP_ID is not set — OAuth login will not work. Set the variable in .env (local) or as a GitHub secret (production).');
+}
+
 // Do NOT force login at startup — the app loads immediately.
 // Users can click "Logg inn" in the Header to authenticate.
 
