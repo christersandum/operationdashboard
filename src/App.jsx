@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import ArcGISMap from './components/ArcGISMap';
 import RightPanel from './components/RightPanel';
 import OperationPicker from './components/OperationPicker';
+import LoginDialog from './components/LoginDialog';
 import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel, CalciteCheckbox } from '@esri/calcite-components-react';
 
 import {
@@ -101,9 +102,10 @@ export default function App() {
   const [pickedLocation, setPickedLocation] = useState(null);   // { lat, lng, utm }
 
   // Auth state
-  const [isSignedIn,  setIsSignedIn]  = useState(false);
-  const [signingIn,   setSigningIn]   = useState(false);
-  const [portalUser,  setPortalUser]  = useState(null);
+  const [isSignedIn,      setIsSignedIn]      = useState(false);
+  const [signingIn,       setSigningIn]       = useState(false);
+  const [portalUser,      setPortalUser]      = useState(null);
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
 
   // ArcGIS Online service URLs (per-operation folder)
   const [serviceUrls, setServiceUrls] = useState({});
@@ -492,17 +494,21 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Login handler ──────────────────────────────────────────
-  const handleLogin = useCallback(async () => {
+  const handleLogin = useCallback(() => {
+    setLoginDialogOpen(true);
+  }, []);
+
+  const handleLoginSuccess = useCallback(async () => {
+    setLoginDialogOpen(false);
     setSigningIn(true);
     try {
-      await IdentityManager.getCredential('https://beredskap.maps.arcgis.com/sharing/rest');
       setIsSignedIn(true);
       const user = await getPortalUser();
       setPortalUser(user);
       addSystemChat('✅ Logget inn som ' + (user?.fullName || user?.username || 'bruker'), '#2ecc71');
     } catch (err) {
-      console.warn('[App] Login failed:', err);
-      addSystemChat('❌ Innlogging mislyktes', '#e74c3c');
+      console.warn('[App] Login success but could not fetch user:', err);
+      addSystemChat('✅ Logget inn', '#2ecc71');
     } finally {
       setSigningIn(false);
     }
@@ -1321,6 +1327,13 @@ export default function App() {
           mapCenter={mapCenter}
         />
       </div>
+
+      {/* Login dialog */}
+      <LoginDialog
+        open={loginDialogOpen}
+        onClose={() => setLoginDialogOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Broadcast modal */}
       <CalciteDialog
