@@ -6,17 +6,6 @@ import App from './App';
 import '@arcgis/core/assets/esri/themes/dark/main.css';
 import '@esri/calcite-components/dist/calcite/calcite.css';
 
-// OAuth 2.0 — redirect flow to beredskap.maps.arcgis.com
-import OAuthInfo from '@arcgis/core/identity/OAuthInfo';
-import IdentityManager from '@arcgis/core/identity/IdentityManager';
-
-const oauthInfo = new OAuthInfo({
-  appId: import.meta.env.VITE_ARCGIS_APP_ID,
-  portalUrl: 'https://beredskap.maps.arcgis.com',
-  popup: false,
-});
-IdentityManager.registerOAuthInfos([oauthInfo]);
-
 // Do NOT force login at startup — the app loads immediately.
 // Users can click "Logg inn" in the Header to authenticate.
 
