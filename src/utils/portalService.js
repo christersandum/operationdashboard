@@ -1,22 +1,23 @@
 /* ============================================================
    portalService.js — ArcGIS Online portal management
-   Handles folder/Feature Service creation and lookup in the
+   Handles per-operation folder creation and lookup in the
    "OPS" folder of the authenticated user's ArcGIS Online content.
+   Each operation gets its own subfolder with 7 dedicated services.
    ============================================================ */
 
 import Portal from '@arcgis/core/portal/Portal';
 import IdentityManager from '@arcgis/core/identity/IdentityManager';
-import { PORTAL_URL, OPS_FOLDER_NAME, WEBMAP_ITEM_TITLE } from '../data';
+import { PORTAL_URL, OPS_FOLDER_NAME } from '../data';
 
 const SR_25833 = { wkid: 25833 };
 
-// ── Common fields shared by all Feature Layers and the Table ─
+// ── Common fields shared by all Feature Layers and Tables ───
 const COMMON_FIELDS = [
   { name: 'Operation_id',   type: 'esriFieldTypeString', alias: 'Operation ID',   length: 100, nullable: false },
   { name: 'Operation_name', type: 'esriFieldTypeString', alias: 'Operation Name', length: 255, nullable: true  },
 ];
 
-// ── Feature Service definitions ──────────────────────────────
+// ── Feature Service definitions (7 per operation) ───────────
 const SERVICE_DEFINITIONS = {
   units: {
     name: 'OPS_Units',
@@ -39,15 +40,15 @@ const SERVICE_DEFINITIONS = {
     geometryType: 'esriGeometryPoint',
     fields: [
       ...COMMON_FIELDS,
-      { name: 'incident_id',  type: 'esriFieldTypeString',  alias: 'Incident ID', length: 50  },
-      { name: 'title',        type: 'esriFieldTypeString',  alias: 'Title',       length: 255 },
+      { name: 'incident_id',  type: 'esriFieldTypeString',  alias: 'Incident ID', length: 50   },
+      { name: 'title',        type: 'esriFieldTypeString',  alias: 'Title',       length: 255  },
       { name: 'description',  type: 'esriFieldTypeString',  alias: 'Description', length: 2000 },
-      { name: 'priority',     type: 'esriFieldTypeString',  alias: 'Priority',    length: 50  },
-      { name: 'icon',         type: 'esriFieldTypeString',  alias: 'Icon',        length: 20  },
-      { name: 'time',         type: 'esriFieldTypeString',  alias: 'Time',        length: 20  },
-      { name: 'color_index',  type: 'esriFieldTypeInteger', alias: 'Color Index'              },
-      { name: 'x_coord',      type: 'esriFieldTypeDouble',  alias: 'Easting UTM33'            },
-      { name: 'y_coord',      type: 'esriFieldTypeDouble',  alias: 'Northing UTM33'           },
+      { name: 'priority',     type: 'esriFieldTypeString',  alias: 'Priority',    length: 50   },
+      { name: 'icon',         type: 'esriFieldTypeString',  alias: 'Icon',        length: 20   },
+      { name: 'time',         type: 'esriFieldTypeString',  alias: 'Time',        length: 20   },
+      { name: 'color_index',  type: 'esriFieldTypeInteger', alias: 'Color Index'               },
+      { name: 'x_coord',      type: 'esriFieldTypeDouble',  alias: 'Easting UTM33'             },
+      { name: 'y_coord',      type: 'esriFieldTypeDouble',  alias: 'Northing UTM33'            },
     ],
   },
   missions: {
@@ -55,14 +56,14 @@ const SERVICE_DEFINITIONS = {
     geometryType: 'esriGeometryPoint',
     fields: [
       ...COMMON_FIELDS,
-      { name: 'mission_id',         type: 'esriFieldTypeString',  alias: 'Mission ID',          length: 50   },
-      { name: 'incident_id',        type: 'esriFieldTypeString',  alias: 'Incident ID',         length: 50   },
-      { name: 'title',              type: 'esriFieldTypeString',  alias: 'Title',               length: 255  },
-      { name: 'description',        type: 'esriFieldTypeString',  alias: 'Description',         length: 2000 },
-      { name: 'status',             type: 'esriFieldTypeString',  alias: 'Status',              length: 50   },
-      { name: 'assigned_unit_ids',  type: 'esriFieldTypeString',  alias: 'Assigned Unit IDs',   length: 500  },
-      { name: 'x_coord',            type: 'esriFieldTypeDouble',  alias: 'Easting UTM33'                     },
-      { name: 'y_coord',            type: 'esriFieldTypeDouble',  alias: 'Northing UTM33'                    },
+      { name: 'mission_id',        type: 'esriFieldTypeString',  alias: 'Mission ID',          length: 50   },
+      { name: 'incident_id',       type: 'esriFieldTypeString',  alias: 'Incident ID',         length: 50   },
+      { name: 'title',             type: 'esriFieldTypeString',  alias: 'Title',               length: 255  },
+      { name: 'description',       type: 'esriFieldTypeString',  alias: 'Description',         length: 2000 },
+      { name: 'status',            type: 'esriFieldTypeString',  alias: 'Status',              length: 50   },
+      { name: 'assigned_unit_ids', type: 'esriFieldTypeString',  alias: 'Assigned Unit IDs',   length: 500  },
+      { name: 'x_coord',           type: 'esriFieldTypeDouble',  alias: 'Easting UTM33'                     },
+      { name: 'y_coord',           type: 'esriFieldTypeDouble',  alias: 'Northing UTM33'                    },
     ],
   },
   ao: {
@@ -75,22 +76,47 @@ const SERVICE_DEFINITIONS = {
   },
   operations: {
     name: 'OPS_Operations',
-    geometryType: null, // table, no geometry
+    geometryType: null, // table — no geometry
     fields: [
       ...COMMON_FIELDS,
-      { name: 'center_lng',   type: 'esriFieldTypeDouble',  alias: 'Center Longitude'            },
-      { name: 'center_lat',   type: 'esriFieldTypeDouble',  alias: 'Center Latitude'             },
-      { name: 'zoom',         type: 'esriFieldTypeInteger', alias: 'Zoom Level'                  },
-      { name: 'commander',    type: 'esriFieldTypeString',  alias: 'Commander',     length: 255  },
-      { name: 'ao_center',    type: 'esriFieldTypeString',  alias: 'AO Center',     length: 100  },
-      { name: 'progress',     type: 'esriFieldTypeInteger', alias: 'Progress (%)'                },
-      { name: 'elapsed',      type: 'esriFieldTypeDouble',  alias: 'Elapsed (ms)'                },
-      { name: 'staged',       type: 'esriFieldTypeInteger', alias: 'Staged (0/1)'                },
-      { name: 'stats_json',   type: 'esriFieldTypeString',  alias: 'Stats JSON',    length: 1000 },
-      { name: 'alerts_json',  type: 'esriFieldTypeString',  alias: 'Alerts JSON',   length: 4000 },
-      { name: 'chat_json',    type: 'esriFieldTypeString',  alias: 'Chat JSON',     length: 32000 },
-      { name: 'created_at',   type: 'esriFieldTypeDate',    alias: 'Created At'                  },
-      { name: 'updated_at',   type: 'esriFieldTypeDate',    alias: 'Updated At'                  },
+      { name: 'center_lng',  type: 'esriFieldTypeDouble',  alias: 'Center Longitude'           },
+      { name: 'center_lat',  type: 'esriFieldTypeDouble',  alias: 'Center Latitude'            },
+      { name: 'zoom',        type: 'esriFieldTypeInteger', alias: 'Zoom Level'                 },
+      { name: 'commander',   type: 'esriFieldTypeString',  alias: 'Commander',    length: 255  },
+      { name: 'ao_center',   type: 'esriFieldTypeString',  alias: 'AO Center',    length: 100  },
+      { name: 'progress',    type: 'esriFieldTypeInteger', alias: 'Progress (%)'               },
+      { name: 'elapsed',     type: 'esriFieldTypeDouble',  alias: 'Elapsed (ms)'               },
+      { name: 'created_at',  type: 'esriFieldTypeDate',    alias: 'Created At'                 },
+      { name: 'updated_at',  type: 'esriFieldTypeDate',    alias: 'Updated At'                 },
+    ],
+  },
+  chat: {
+    name: 'OPS_Chat',
+    geometryType: null, // table — no geometry
+    fields: [
+      { name: 'Operation_id', type: 'esriFieldTypeString',  alias: 'Operation ID',  length: 100  },
+      { name: 'message_id',   type: 'esriFieldTypeInteger', alias: 'Message ID'                  },
+      { name: 'sender',       type: 'esriFieldTypeString',  alias: 'Sender',        length: 255  },
+      { name: 'initials',     type: 'esriFieldTypeString',  alias: 'Initials',      length: 10   },
+      { name: 'color',        type: 'esriFieldTypeString',  alias: 'Color',         length: 20   },
+      { name: 'text',         type: 'esriFieldTypeString',  alias: 'Text',          length: 2000 },
+      { name: 'is_system',    type: 'esriFieldTypeInteger', alias: 'Is System'                   },
+      { name: 'is_self',      type: 'esriFieldTypeInteger', alias: 'Is Self'                     },
+      { name: 'sent_at',      type: 'esriFieldTypeDate',    alias: 'Sent At'                     },
+    ],
+  },
+  alerts: {
+    name: 'OPS_Alerts',
+    geometryType: null, // table — no geometry
+    fields: [
+      { name: 'Operation_id', type: 'esriFieldTypeString',  alias: 'Operation ID',    length: 100  },
+      { name: 'alert_id',     type: 'esriFieldTypeString',  alias: 'Alert ID',        length: 100  },
+      { name: 'text',         type: 'esriFieldTypeString',  alias: 'Alert Text',      length: 1000 },
+      { name: 'icon',         type: 'esriFieldTypeString',  alias: 'Icon',            length: 10   },
+      { name: 'icon_bg',      type: 'esriFieldTypeString',  alias: 'Icon Background', length: 20   },
+      { name: 'icon_color',   type: 'esriFieldTypeString',  alias: 'Icon Color',      length: 20   },
+      { name: 'severity',     type: 'esriFieldTypeString',  alias: 'Severity',        length: 20   },
+      { name: 'created_at',   type: 'esriFieldTypeDate',    alias: 'Created At'                    },
     ],
   },
 };
@@ -108,39 +134,24 @@ export async function getPortalUser() {
   return portal.user;
 }
 
-// ── Ensure "OPS" folder exists; return folder ID ─────────────
-async function ensureOpsFolder(token) {
-  const username = (await getPortalUser()).username;
+// ── Ensure the top-level "OPS" folder exists; return folder ID ─
+async function ensureOpsRootFolder(token, username) {
   const url = `${PORTAL_URL}/sharing/rest/content/users/${username}?f=json&token=${token}`;
   const resp = await fetch(url);
   const data = await resp.json();
   const existing = (data.folders || []).find(f => f.title === OPS_FOLDER_NAME);
   if (existing) return existing.id;
 
-  // Create folder
   const createUrl = `${PORTAL_URL}/sharing/rest/content/users/${username}/createFolder`;
   const body = new URLSearchParams({ title: OPS_FOLDER_NAME, f: 'json', token });
   const createResp = await fetch(createUrl, { method: 'POST', body });
   const createData = await createResp.json();
   if (createData.folder) return createData.folder.id;
-  throw new Error(`Failed to create folder "${OPS_FOLDER_NAME}": ${JSON.stringify(createData)}`);
+  throw new Error(`Failed to create root folder "${OPS_FOLDER_NAME}": ${JSON.stringify(createData)}`);
 }
 
-// ── Find existing Feature Service item in the OPS folder ─────
-async function findServiceInFolder(token, serviceName) {
-  const username = (await getPortalUser()).username;
-  const q = encodeURIComponent(`title:"${serviceName}" owner:${username} type:"Feature Service"`);
-  const url = `${PORTAL_URL}/sharing/rest/search?q=${q}&f=json&token=${encodeURIComponent(token)}&num=10`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-  const item = (data.results || []).find(r => r.title === serviceName);
-  return item || null;
-}
-
-// ── Create a hosted Feature Service ──────────────────────────
-async function createFeatureService(token, folderId, def) {
-  const username = (await getPortalUser()).username;
-
+// ── Create a hosted Feature Service inside a portal folder ───
+async function createFeatureService(token, username, folderId, def) {
   // 1. Create empty hosted Feature Service
   const createServiceUrl = `${PORTAL_URL}/sharing/rest/content/users/${username}/${folderId}/createService`;
   const serviceParams = {
@@ -210,79 +221,138 @@ async function createFeatureService(token, folderId, def) {
   return `${serviceUrl}/0`;
 }
 
-// ── Find or create WebMap "OPSMAP" in OPS folder ─────────────
-export async function ensureWebMap(token, folderId, layerUrls) {
-  const username = (await getPortalUser()).username;
-
-  // Search for existing WebMap
-  const webmapQ = encodeURIComponent(`title:"${WEBMAP_ITEM_TITLE}" owner:${username} type:"Web Map"`);
-  const searchUrl = `${PORTAL_URL}/sharing/rest/search?q=${webmapQ}&f=json&token=${encodeURIComponent(token)}&num=5`;
-  const searchResp = await fetch(searchUrl);
-  const searchData = await searchResp.json();
-  const existing = (searchData.results || []).find(r => r.title === WEBMAP_ITEM_TITLE);
-  if (existing) return existing.id;
-
-  // Build WebMap JSON with all operational layers
+// ── Create a WebMap item in the operation's folder ───────────
+async function createOperationWebMap(token, username, folderId, operationName, layerUrls) {
   const operationalLayers = [
-    layerUrls.ao       && { id: 'ao-layer',       title: 'AO',       url: layerUrls.ao,       opacity: 1, visibility: true },
-    layerUrls.missions && { id: 'missions-layer',  title: 'Oppdrag',  url: layerUrls.missions, opacity: 1, visibility: true },
-    layerUrls.incidents&& { id: 'incidents-layer', title: 'Hendelser',url: layerUrls.incidents,opacity: 1, visibility: true },
-    layerUrls.units    && { id: 'units-layer',     title: 'Enheter',  url: layerUrls.units,    opacity: 1, visibility: true },
+    layerUrls.ao       && { id: 'ao-layer',        title: 'AO',        url: layerUrls.ao,        opacity: 1, visibility: true },
+    layerUrls.missions && { id: 'missions-layer',  title: 'Oppdrag',   url: layerUrls.missions,  opacity: 1, visibility: true },
+    layerUrls.incidents&& { id: 'incidents-layer', title: 'Hendelser', url: layerUrls.incidents, opacity: 1, visibility: true },
+    layerUrls.units    && { id: 'units-layer',     title: 'Enheter',   url: layerUrls.units,     opacity: 1, visibility: true },
   ].filter(Boolean);
 
   const webmapJson = {
     operationalLayers,
     baseMap: {
-      baseMapLayers: [{ id: 'defaultBasemap', opacity: 1, visibility: true, url: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer' }],
+      baseMapLayers: [{
+        id: 'defaultBasemap', opacity: 1, visibility: true,
+        url: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer',
+      }],
       title: 'Mørkt kart (NO)',
     },
     spatialReference: { wkid: 102100 },
     authoringApp: 'OperationDashboard',
-    authoringAppVersion: '1.0',
+    authoringAppVersion: '1.1',
     version: '2.28',
   };
 
-  // Create WebMap item
+  const title = `OPSMAP — ${operationName}`;
   const addItemUrl = `${PORTAL_URL}/sharing/rest/content/users/${username}/${folderId}/addItem`;
   const body = new URLSearchParams({
     f: 'json',
     token,
-    title: WEBMAP_ITEM_TITLE,
+    title,
     type: 'Web Map',
     tags: 'OPS,operations,dashboard',
-    snippet: 'Operation Dashboard WebMap',
+    snippet: `Operation Dashboard WebMap for ${operationName}`,
     text: JSON.stringify(webmapJson),
   });
   const addResp = await fetch(addItemUrl, { method: 'POST', body });
   const addData = await addResp.json();
   if (!addData.id) {
-    throw new Error(`Failed to create WebMap: ${JSON.stringify(addData)}`);
+    throw new Error(`Failed to create WebMap for "${operationName}": ${JSON.stringify(addData)}`);
   }
   return addData.id;
 }
 
-// ── Main entry: ensure all services exist; return URLs ────────
-export async function ensureOpsServices() {
-  const token = await getToken();
-  const folderId = await ensureOpsFolder(token);
+// ── Create an operation subfolder with all 7 services + WebMap ─
+/**
+ * Creates OPS/<operationName>/ folder with 7 Feature Services and a WebMap.
+ * Returns { folderId, urls, webmapId }.
+ */
+export async function createOperationFolder(operationName) {
+  const token    = await getToken();
+  const username = (await getPortalUser()).username;
 
-  const serviceKeys = ['units', 'incidents', 'missions', 'ao', 'operations'];
+  // Ensure OPS root folder exists (unused folderId — operations go in subfolders)
+  await ensureOpsRootFolder(token, username);
+
+  // Create the operation subfolder: title "OPS — <operationName>"
+  const subfolderTitle = `OPS — ${operationName}`;
+  const createUrl = `${PORTAL_URL}/sharing/rest/content/users/${username}/createFolder`;
+  const body = new URLSearchParams({ title: subfolderTitle, f: 'json', token });
+  const createResp = await fetch(createUrl, { method: 'POST', body });
+  const createData = await createResp.json();
+  if (!createData.folder) {
+    throw new Error(`Failed to create operation folder "${subfolderTitle}": ${JSON.stringify(createData)}`);
+  }
+  const folderId = createData.folder.id;
+
+  // Create all 7 services sequentially to avoid rate limits
   const urls = {};
-
-  for (const key of serviceKeys) {
+  for (const key of ['units', 'incidents', 'missions', 'ao', 'operations', 'chat', 'alerts']) {
     const def = SERVICE_DEFINITIONS[key];
-    let item = await findServiceInFolder(token, def.name);
-    if (item) {
-      // Extract Feature Server URL and append /0
-      urls[key] = item.url ? `${item.url}/0` : null;
+    console.log(`[portalService] Creating "${def.name}" in folder "${subfolderTitle}"…`);
+    urls[key] = await createFeatureService(token, username, folderId, def);
+  }
+
+  // Create WebMap with the 4 spatial layers
+  const webmapId = await createOperationWebMap(token, username, folderId, operationName, urls);
+
+  return { folderId, urls, webmapId };
+}
+
+// ── List all operation subfolders inside OPS ─────────────────
+/**
+ * Returns array of { folderId, folderTitle, operationName } objects,
+ * one for each subfolder whose title starts with "OPS — ".
+ */
+export async function listOperationFolders() {
+  const token    = await getToken();
+  const username = (await getPortalUser()).username;
+
+  const url = `${PORTAL_URL}/sharing/rest/content/users/${username}?f=json&token=${token}`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+
+  return (data.folders || [])
+    .filter(f => f.title && f.title.startsWith('OPS — '))
+    .map(f => ({
+      folderId:      f.id,
+      folderTitle:   f.title,
+      operationName: f.title.replace(/^OPS — /, ''),
+    }));
+}
+
+// ── Get the 7 service URLs for an existing operation folder ──
+/**
+ * Searches the given folder for the 7 expected Feature Services and
+ * returns their layer-0 URLs.
+ */
+export async function getOperationServiceUrls(folderId) {
+  const token    = await getToken();
+  const username = (await getPortalUser()).username;
+
+  const url = `${PORTAL_URL}/sharing/rest/content/users/${username}/${folderId}?f=json&token=${token}`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+
+  const items = data.items || [];
+  const urls  = {};
+
+  for (const [key, def] of Object.entries(SERVICE_DEFINITIONS)) {
+    const item = items.find(i => i.type === 'Feature Service' && i.title === def.name);
+    if (item && item.url) {
+      urls[key] = `${item.url}/0`;
     } else {
-      console.log(`[portalService] Creating "${def.name}"…`);
-      urls[key] = await createFeatureService(token, folderId, def);
+      urls[key] = null;
     }
   }
 
-  // Ensure WebMap exists with all layers
-  const webmapId = await ensureWebMap(token, folderId, urls);
+  return urls;
+}
 
-  return { urls, webmapId };
+// ── Legacy stub kept for import compatibility ────────────────
+export async function ensureOpsServices() {
+  console.warn('[portalService] ensureOpsServices() is deprecated. Use createOperationFolder().');
+  return { urls: {}, webmapId: null };
 }

@@ -17,8 +17,8 @@ const oauthInfo = new OAuthInfo({
 });
 IdentityManager.registerOAuthInfos([oauthInfo]);
 
-// Trigger login immediately — user must be signed in before the app loads
-IdentityManager.getCredential('https://beredskap.maps.arcgis.com/sharing/rest');
+// Do NOT force login at startup — the app loads immediately.
+// Users can click "Logg inn" in the Header to authenticate.
 
 // ArcGIS map-components loader
 import { defineCustomElements } from '@arcgis/map-components/dist/loader';
