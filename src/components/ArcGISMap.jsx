@@ -13,31 +13,29 @@ import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import CIMSymbol from '@arcgis/core/symbols/CIMSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
+import BasemapGallery from '@arcgis/core/widgets/BasemapGallery';
+import Portal from '@arcgis/core/portal/Portal';
 import PortalItem from '@arcgis/core/portal/PortalItem';
 import {
-  LIGHT_BASEMAP_URL,
-  DARK_BASEMAP_URL,
-  BASEMAP_OPTIONS,
   SKOLER_BARNEHAGER_URL,
   SEARCH_LOCATOR_ITEM_ID,
   SEARCH_PORTAL_URL,
+  PORTAL_URL,
 } from '../data';
 import { wgs84ToUTM33N } from '../utils/coordUtils';
+
+// Offline fallback basemap URLs (Norwegian VectorTile — no auth required)
+const DARK_BASEMAP_URL  = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer';
+const LIGHT_BASEMAP_URL = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer';
 
 // Mission marker positioning: offset from incident so markers don't overlap
 const MISSION_MARKER_OFFSET = 0.001; // ~100 m in degrees
 const MISSION_GRID_COLS     = 3;     // arrange markers in 3-column grid
 
-// ── Helper: build a Basemap instance from a BASEMAP_OPTIONS entry ──
-function buildBasemap(basemapId) {
-  const option = BASEMAP_OPTIONS.find(b => b.id === basemapId);
-  if (!option || option.type === 'custom') {
-    // Norwegian custom VectorTileServer basemaps
-    const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
-    return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
-  }
-  // ArcGIS Online named basemap (requires esriConfig.apiKey set in main.jsx)
-  return new Basemap({ style: { id: basemapId } });
+// ── Helper: build a Basemap instance for offline fallback ────
+function buildOfflineBasemap(basemapId) {
+  const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
+  return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
 }
 
 export default function ArcGISMap({
@@ -57,6 +55,7 @@ export default function ArcGISMap({
   onMapClick,
   skolerBarnehagerVisible,
   pickingLocation,
+  isSignedIn,
 }) {
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
@@ -64,6 +63,7 @@ export default function ArcGISMap({
   const onMapClickRef = useRef(onMapClick);
   const mapRef      = useRef(null);
   const basemapRef  = useRef(basemap);
+  const basemapGalleryRef = useRef(null);
 
   const skolerLayerRef   = useRef(null);
   const unitLayerRef     = useRef(null);
@@ -110,7 +110,7 @@ export default function ArcGISMap({
 
     // ── Map with initial basemap ─────────────────────────────
     const map = new Map({
-      basemap: buildBasemap(basemap),
+      basemap: buildOfflineBasemap(basemap),
       layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
     });
     mapRef.current = map;
@@ -207,13 +207,37 @@ export default function ArcGISMap({
     }
   }, [pickingLocation]);
 
-  // ── Basemap switch ─────────────────────────────────────────
+  // ── Basemap switch (offline fallback only — portal BasemapGallery handles online) ─
   useEffect(() => {
     if (!mapRef.current) return;
     if (basemap === basemapRef.current) return;
-    mapRef.current.basemap = buildBasemap(basemap);
+    // Only switch using offline basemaps when not signed in
+    if (!basemapGalleryRef.current) {
+      mapRef.current.basemap = buildOfflineBasemap(basemap);
+    }
     basemapRef.current = basemap;
   }, [basemap]);
+
+  // ── Add BasemapGallery when user signs in ─────────────────
+  useEffect(() => {
+    if (!viewRef.current) return;
+    if (isSignedIn && !basemapGalleryRef.current) {
+      // Use the portal's configured basemap group
+      const portal = new Portal({ url: PORTAL_URL });
+      const gallery = new BasemapGallery({
+        view: viewRef.current,
+        source: { portal },
+      });
+      viewRef.current.ui.add(gallery, 'bottom-right');
+      basemapGalleryRef.current = gallery;
+    } else if (!isSignedIn && basemapGalleryRef.current) {
+      viewRef.current.ui.remove(basemapGalleryRef.current);
+      basemapGalleryRef.current.destroy();
+      basemapGalleryRef.current = null;
+      // Restore offline basemap
+      if (mapRef.current) mapRef.current.basemap = buildOfflineBasemap(basemapRef.current);
+    }
+  }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fly to new center/zoom ─────────────────────────────────
   useEffect(() => {
