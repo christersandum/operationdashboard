@@ -5,7 +5,7 @@
    When not signed in: only local file import is available.
    ============================================================ */
 
-import React, { useRef } from 'react';
+import React from 'react';
 import {
   CalciteDialog,
   CalciteButton,

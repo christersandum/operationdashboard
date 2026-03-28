@@ -6,9 +6,7 @@ import ArcGISMap from './components/ArcGISMap';
 import RightPanel from './components/RightPanel';
 import OperationPicker from './components/OperationPicker';
 import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel, CalciteCheckbox } from '@esri/calcite-components-react';
-import {
-  INCIDENT_COLORS,
-} from './data';
+
 import {
   UNITS_SWORD,
   INCIDENTS_SWORD_STAGED,
@@ -25,8 +23,7 @@ import {
   loadOperation as loadOperationFromService,
   operationExistsInLayer,
   addFeature,
-  updateFeature,
-  deleteFeature,
+  listOperations,
 } from './utils/featureServiceSync';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
@@ -67,6 +64,7 @@ export default function App() {
   const [chatHistory,    setChatHistory]    = useState([]);
   const [stats,          setStats]          = useState({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
   const [missionStartTime, setMissionStartTime] = useState(null);
+  const [currentOpName,  setCurrentOpName]  = useState(SEED_CONFIG.operationName);
   const [basemap,        setBasemap]        = useState('dark');
   const [mapCenter,      setMapCenter]      = useState([10.741, 59.913]);
   const [mapZoom,        setMapZoom]        = useState(12);
@@ -664,7 +662,10 @@ export default function App() {
     const urls = serviceUrlsRef.current;
     if (urls?.units) {
       addFeature(urls.units, makeUnitGraphic(newUnit, currentOpId))
-        .catch(err => console.warn('[App] addFeature(unit) failed:', err));
+        .catch(err => {
+          console.warn('[App] addFeature(unit) failed:', err);
+          addSystemChat(`⚠ Synkronisering feilet for enhet: ${err.message}`, '#f39c12');
+        });
     }
   }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -688,7 +689,10 @@ export default function App() {
     const urls = serviceUrlsRef.current;
     if (urls?.incidents) {
       addFeature(urls.incidents, makeIncidentGraphic(newInc, currentOpId))
-        .catch(err => console.warn('[App] addFeature(incident) failed:', err));
+        .catch(err => {
+          console.warn('[App] addFeature(incident) failed:', err);
+          addSystemChat(`⚠ Synkronisering feilet for hendelse: ${err.message}`, '#f39c12');
+        });
     }
   }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -726,7 +730,10 @@ export default function App() {
     const urls = serviceUrlsRef.current;
     if (urls?.missions) {
       addFeature(urls.missions, makeMissionGraphic(newMission, incidentsRef.current, currentOpId))
-        .catch(err => console.warn('[App] addFeature(mission) failed:', err));
+        .catch(err => {
+          console.warn('[App] addFeature(mission) failed:', err);
+          addSystemChat(`⚠ Synkronisering feilet for oppdrag: ${err.message}`, '#f39c12');
+        });
     }
   }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -774,7 +781,7 @@ export default function App() {
   function buildOpData() {
     return {
       operationId:   currentOpId,
-      operationName: SEED_CONFIG.operationName,
+      operationName: currentOpName,
       center:        SEED_CONFIG.center,
       zoom:          SEED_CONFIG.zoom,
       aoCoords:      currentAoCoords || SEED_CONFIG.aoCoords,
@@ -843,8 +850,10 @@ export default function App() {
         setServiceUrls(newUrls);
         activeUrls = newUrls;
 
-        // Seed the folder with Norwegian Sword data on first creation
-        await seedNorwegianSword(activeUrls, opData.operationId);
+        // Seed Norwegian Sword data only if this is the Norwegian Sword operation
+        if (opData.operationId === 'norwegian-sword') {
+          await seedNorwegianSword(activeUrls, opData.operationId);
+        }
       }
       await saveOperation(activeUrls, opData, overwrite);
       addSystemChat('✅ Operasjon lagret til ArcGIS Online.', '#2ecc71');
@@ -904,8 +913,15 @@ export default function App() {
       const urls = await getOperationServiceUrls(folderId);
       serviceUrlsRef.current = urls;
       setServiceUrls(urls);
-      // Use operationId from the folder — query the operations table
-      const { units, incidents, missions, ao, meta, chat } = await loadOperationFromService(urls, currentOpId);
+
+      // Discover which operation ID is stored in this folder
+      const ops = urls.operations ? await listOperations(urls.operations) : [];
+      const targetOpId = ops[0]?.id || currentOpId;
+      const targetOpName = ops[0]?.name || currentOpName;
+
+      const { units, incidents, missions, ao, meta, chat } = await loadOperationFromService(urls, targetOpId);
+      setCurrentOpId(targetOpId);
+      setCurrentOpName(targetOpName);
       applyLoadedOperation({
         units,
         incidents,
@@ -915,13 +931,13 @@ export default function App() {
         center:   meta?.center,
         zoom:     meta?.zoom,
         chat,
-      }, meta?.operationName || currentOpId);
-      addSystemChat(`✅ Operasjon lastet fra ArcGIS Online.`, '#2ecc71');
+      }, targetOpName);
+      addSystemChat(`✅ Operasjon "${targetOpName}" lastet fra ArcGIS Online.`, '#2ecc71');
     } catch (err) {
       console.error('[App] Load from ArcGIS failed:', err);
       addSystemChat(`❌ Lasting feilet: ${err.message}`, '#e74c3c');
     }
-  }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentOpId, currentOpName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function applyLoadedOperation(opData, label) {
     simTimers.current.forEach(clearTimeout);
@@ -964,6 +980,8 @@ export default function App() {
     setMissions([]);
     chatIdRef.current = 2;
     const displayName = opName || 'Ny operasjon';
+    setCurrentOpId(displayName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
+    setCurrentOpName(displayName);
     setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: `${displayName} opprettet. Legg til enheter og hendelser.` }]);
     setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
     // Clear per-operation service URLs — new folder will be created on first save
