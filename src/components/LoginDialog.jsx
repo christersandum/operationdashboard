@@ -30,6 +30,7 @@ export default function LoginDialog({ open, onClose, onLoginSuccess }) {
           body: new URLSearchParams({
             username,
             password,
+            client: 'referer',
             referer: window.location.origin,
             f: 'json',
           }),
