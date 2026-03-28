@@ -30,17 +30,18 @@ export default function LoginDialog({ open, onClose, onLoginSuccess }) {
           body: new URLSearchParams({
             username,
             password,
-            client: 'referer',
-            referer: window.location.origin,
+            client: 'requestip',
             f: 'json',
           }),
         }
       );
       const data = await response.json();
       if (data.error) {
+        console.error('[LoginDialog] ArcGIS generateToken error:', JSON.stringify(data.error));
         const msg = data.error.message || data.error.details?.[0] || 'Feil brukernavn eller passord.';
         setError(msg);
       } else {
+        console.log('[LoginDialog] Token obtained successfully, expires:', new Date(data.expires).toISOString());
         IdentityManager.registerToken({
           server: 'https://beredskap.maps.arcgis.com/sharing/rest',
           token: data.token,
