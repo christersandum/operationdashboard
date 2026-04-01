@@ -5,6 +5,7 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
   const [query,  setQuery]  = useState('');
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
+  const [collapsedTeams, setCollapsedTeams] = useState({});
 
   const filtered = useMemo(() => {
     return units.filter(u => {
@@ -12,7 +13,8 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
       const matchQ = !q
         || u.name.toLowerCase().includes(q)
         || u.role.toLowerCase().includes(q)
-        || u.id.toLowerCase().includes(q);
+        || u.id.toLowerCase().includes(q)
+        || (u.team || '').toLowerCase().includes(q);
       const matchF = filter === 'all'
         || (filter === 'ledig'   && (u.status === 'ledig' || u.status === 'online') && !u.assignedIncident)
         || (filter === 'opptatt' && (u.status === 'opptatt' || (u.assignedIncident && u.status !== 'offline')))
@@ -22,21 +24,31 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
     });
   }, [units, query, filter]);
 
-  const groups = useMemo(() => {
-    const unassigned = filtered.filter(u => !u.assignedIncident);
-    const incidentGroups = {};
-    incidents.forEach(inc => {
-      const inGroup = filtered.filter(u => u.assignedIncident === inc.id);
-      if (inGroup.length > 0) {
-        incidentGroups[inc.id] = { incident: inc, units: inGroup };
-      }
+  // Group by team
+  const teamGroups = useMemo(() => {
+    const map = {};
+    filtered.forEach(u => {
+      const team = u.team || 'Ukjent';
+      if (!map[team]) map[team] = [];
+      map[team].push(u);
     });
-    return { unassigned, incidentGroups };
-  }, [filtered, incidents]);
+    return map;
+  }, [filtered]);
+
+  // Map incidentId → incident for colored assignment badges
+  const incidentMap = useMemo(() => {
+    const m = {};
+    incidents.forEach(inc => { m[inc.id] = inc; });
+    return m;
+  }, [incidents]);
 
   const handleClick = (unit) => {
     setSelectedId(unit.id);
     if (onUnitClick) onUnitClick(unit);
+  };
+
+  const toggleTeam = (team) => {
+    setCollapsedTeams(prev => ({ ...prev, [team]: !prev[team] }));
   };
 
   const filterDefs = [
@@ -96,31 +108,36 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
           </div>
         )}
 
-        {groups.unassigned.length > 0 && (
-          <>
-            <div className="group-header">
-              <span style={{ color: 'var(--text-muted)' }}>● Ikke tildelt</span>
-              <span>{groups.unassigned.length}</span>
-            </div>
-            {groups.unassigned.map(u => (
-              <UnitItem key={u.id} unit={u} selected={selectedId === u.id} onClick={handleClick} />
-            ))}
-          </>
-        )}
-
-        {Object.values(groups.incidentGroups).map(({ incident, units: gu }, idx) => {
-          const incColor = INCIDENT_COLORS[incident.colorIndex ?? idx % INCIDENT_COLORS.length];
+        {Object.entries(teamGroups).map(([team, teamUnits]) => {
+          const isCollapsed = !!collapsedTeams[team];
           return (
-            <React.Fragment key={incident.id}>
-              <div className="group-header">
-                <span style={{ color: incColor }}>
-                  {incident.icon} {incident.title}
+            <React.Fragment key={team}>
+              <div
+                className="group-header"
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => toggleTeam(team)}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    {isCollapsed ? '▶' : '▼'}
+                  </span>
+                  <span style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{team}</span>
                 </span>
-                <span>{gu.length}</span>
+                <span>{teamUnits.length}</span>
               </div>
-              {gu.map(u => (
-                <UnitItem key={u.id} unit={u} selected={selectedId === u.id} onClick={handleClick} incidentColor={incColor} />
-              ))}
+              {!isCollapsed && teamUnits.map(u => {
+                const inc = u.assignedIncident ? incidentMap[u.assignedIncident] : null;
+                const incColor = inc ? INCIDENT_COLORS[inc.colorIndex ?? 0] : null;
+                return (
+                  <UnitItem
+                    key={u.id}
+                    unit={u}
+                    selected={selectedId === u.id}
+                    onClick={handleClick}
+                    incidentColor={incColor}
+                  />
+                );
+              })}
             </React.Fragment>
           );
         })}

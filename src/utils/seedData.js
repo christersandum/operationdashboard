@@ -18,27 +18,23 @@ export const SEED_CONFIG = {
   progress:      15,
   elapsed:       30 * 60000,
   staged:        true,
-  stats:         { units: 12, incidents: 0, tasks: 5, alerts: 3 },
-  alerts: [
-    { icon: '⚠',  iconBg: 'rgba(243,156,18,0.15)', iconColor: '#f39c12', text: 'Økt kriminalaktivitet rapportert i sentrum', time: '5 min siden' },
-    { icon: '🔍', iconBg: 'rgba(155,89,182,0.15)', iconColor: '#9b59b6', text: 'Etterretning: Koordinerte aksjoner mulig',    time: '12 min siden' },
-    { icon: '🏦', iconBg: 'rgba(231,76,60,0.15)',  iconColor: '#e74c3c', text: 'Kilde varsler om mulig bankran i Oslo',       time: '18 min siden' },
-  ],
+  stats:         { units: 12, incidents: 0, tasks: 5, alerts: 0 },
+  alerts:        [],
 };
 
 export const UNITS_SWORD = [
-  { id: 'P1', name: 'Patrulje-1',  role: 'Politipatrulje',  status: 'online',  moving: false, lat: 59.940, lng: 10.710 },
-  { id: 'P2', name: 'Patrulje-2',  role: 'Politipatrulje',  status: 'online',  moving: false, lat: 59.897, lng: 10.785 },
-  { id: 'P3', name: 'Patrulje-3',  role: 'Politipatrulje',  status: 'offline', moving: false, lat: 59.930, lng: 10.765 },
-  { id: 'P4', name: 'Patrulje-4',  role: 'Politipatrulje',  status: 'online',  moving: false, lat: 59.885, lng: 10.720 },
-  { id: 'D1', name: 'Delta-1',     role: 'Beredskapstropp', status: 'online',  moving: false, lat: 59.918, lng: 10.740 },
-  { id: 'D2', name: 'Delta-2',     role: 'Beredskapstropp', status: 'online',  moving: false, lat: 59.905, lng: 10.760 },
-  { id: 'T1', name: 'Taktisk-1',   role: 'Taktisk team',    status: 'online',  moving: false, lat: 59.915, lng: 10.790 },
-  { id: 'T2', name: 'Taktisk-2',   role: 'Taktisk team',    status: 'online',  moving: false, lat: 59.895, lng: 10.698 },
-  { id: 'K1', name: 'Kommando-1',  role: 'Kommandopost',    status: 'online',  moving: false, lat: 59.920, lng: 10.730 },
-  { id: 'L1', name: 'Lege-1',      role: 'Medisinsk enhet', status: 'online',  moving: false, lat: 59.902, lng: 10.750 },
-  { id: 'U1', name: 'Utrykning-1', role: 'Utrykkingsenhet', status: 'offline', moving: false, lat: 59.935, lng: 10.750 },
-  { id: 'E1', name: 'ETS-1',       role: 'Etterretning',    status: 'online',  moving: false, lat: 59.910, lng: 10.708 },
+  { id: 'P1', name: 'Patrulje-1',  role: 'Politipatrulje',  team: 'Patrulje',  status: 'online',  moving: false, lat: 59.940, lng: 10.710 },
+  { id: 'P2', name: 'Patrulje-2',  role: 'Politipatrulje',  team: 'Patrulje',  status: 'online',  moving: false, lat: 59.897, lng: 10.785 },
+  { id: 'P3', name: 'Patrulje-3',  role: 'Politipatrulje',  team: 'Patrulje',  status: 'offline', moving: false, lat: 59.930, lng: 10.765 },
+  { id: 'P4', name: 'Patrulje-4',  role: 'Politipatrulje',  team: 'Patrulje',  status: 'online',  moving: false, lat: 59.885, lng: 10.720 },
+  { id: 'D1', name: 'Delta-1',     role: 'Beredskapstropp', team: 'Delta',     status: 'online',  moving: false, lat: 59.918, lng: 10.740 },
+  { id: 'D2', name: 'Delta-2',     role: 'Beredskapstropp', team: 'Delta',     status: 'online',  moving: false, lat: 59.905, lng: 10.760 },
+  { id: 'T1', name: 'Taktisk-1',   role: 'Taktisk team',    team: 'Taktisk',   status: 'online',  moving: false, lat: 59.915, lng: 10.790 },
+  { id: 'T2', name: 'Taktisk-2',   role: 'Taktisk team',    team: 'Taktisk',   status: 'online',  moving: false, lat: 59.895, lng: 10.698 },
+  { id: 'K1', name: 'Kommando-1',  role: 'Kommandopost',    team: 'Kommando',  status: 'online',  moving: false, lat: 59.920, lng: 10.730 },
+  { id: 'L1', name: 'Lege-1',      role: 'Medisinsk enhet', team: 'Medisinsk', status: 'online',  moving: false, lat: 59.902, lng: 10.750 },
+  { id: 'U1', name: 'Utrykning-1', role: 'Utrykkingsenhet', team: 'Utrykning', status: 'offline', moving: false, lat: 59.935, lng: 10.750 },
+  { id: 'E1', name: 'ETS-1',       role: 'Etterretning',    team: 'Etterretning', status: 'online',  moving: false, lat: 59.910, lng: 10.708 },
 ];
 
 export const INCIDENTS_SWORD_STAGED = [

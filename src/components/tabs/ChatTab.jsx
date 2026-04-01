@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 
-export default function ChatTab({ messages, onSend }) {
+export default function ChatTab({ messages, onSend, units }) {
   const [inputText, setInputText]   = useState('');
+  const [recipients, setRecipients] = useState(['Alle']);
+  const [recipientOpen, setRecipientOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef    = useRef(null);
+  const recipientRef   = useRef(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -11,11 +14,55 @@ export default function ChatTab({ messages, onSend }) {
     }
   }, [messages]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (recipientRef.current && !recipientRef.current.contains(e.target)) {
+        setRecipientOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Build list of teams and individual units from props
+  const recipientOptions = useMemo(() => {
+    const teams = new Set();
+    (units || []).forEach(u => { if (u.team) teams.add(u.team); });
+    const opts = [
+      { id: 'Alle', label: 'Alle (kringkast)', isTeam: true },
+      ...Array.from(teams).map(t => ({ id: t, label: `Team: ${t}`, isTeam: true })),
+      ...(units || []).map(u => ({ id: u.id, label: `${u.id} — ${u.name}`, isTeam: false })),
+    ];
+    return opts;
+  }, [units]);
+
+  const toggleRecipient = (id) => {
+    if (id === 'Alle') {
+      setRecipients(['Alle']);
+      return;
+    }
+    setRecipients(prev => {
+      const without = prev.filter(r => r !== 'Alle');
+      if (without.includes(id)) {
+        const next = without.filter(r => r !== id);
+        return next.length === 0 ? ['Alle'] : next;
+      }
+      return [...without, id];
+    });
+  };
+
+  const recipientLabel = recipients.includes('Alle')
+    ? 'Alle'
+    : recipients.join(', ');
+
   const handleSend = () => {
     const text = inputText.trim();
     if (!text) return;
-    onSend(text);
+    const toAll = recipients.includes('Alle') || recipients.length === 0;
+    onSend(text, toAll ? null : recipients);
     setInputText('');
+    setRecipients(['Alle']);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
@@ -55,6 +102,40 @@ export default function ChatTab({ messages, onSend }) {
       </div>
 
       <div className="chat-input-area">
+        {/* Recipient picker */}
+        <div className="chat-recipient-row" ref={recipientRef} style={{ position: 'relative', marginBottom: '4px' }}>
+          <button
+            className="chat-recipient-btn"
+            onClick={() => setRecipientOpen(v => !v)}
+            title="Velg mottakere"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            <span>Til: {recipientLabel}</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          {recipientOpen && (
+            <div className="chat-recipient-dropdown">
+              {recipientOptions.map(opt => (
+                <label key={opt.id} className="chat-recipient-option">
+                  <input
+                    type="checkbox"
+                    checked={recipients.includes(opt.id) || (opt.id === 'Alle' && recipients.includes('Alle'))}
+                    onChange={() => toggleRecipient(opt.id)}
+                  />
+                  <span className={opt.isTeam ? 'chat-recipient-team' : ''}>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="chat-input-row">
           <textarea
             ref={textareaRef}
@@ -98,6 +179,11 @@ function ChatMessage({ msg }) {
           <span className="chat-msg-name">{msg.sender}</span>
           <span className="chat-msg-time">{msg.time}</span>
         </div>
+        {msg.recipients && msg.recipients.length > 0 && (
+          <div className="chat-msg-recipients">
+            Til: {msg.recipients.join(', ')}
+          </div>
+        )}
         <div className="chat-msg-bubble">{msg.text}</div>
       </div>
     </div>

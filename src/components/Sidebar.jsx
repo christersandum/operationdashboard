@@ -34,7 +34,7 @@ const PANEL_HEADINGS = {
 export default function Sidebar({
   opConfig, units, incidents, missions, chatHistory, stats, missionStartTime,
   onUnitClick, onIncidentClick, onSendMessage, unreadChat, unreadIncidents,
-  onTabChange, width,
+  onTabChange, onMissionClick, width,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -79,10 +79,10 @@ export default function Sidebar({
           <IncidentsTab incidents={incidents} units={units} onIncidentClick={onIncidentClick} />
         </div>
         <div style={{ display: activeTab === 'missions'    ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <MissionsTab missions={missions || []} units={units} incidents={incidents} />
+          <MissionsTab missions={missions || []} units={units} incidents={incidents} onMissionClick={onMissionClick} />
         </div>
         <div style={{ display: activeTab === 'chat'        ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <ChatTab messages={chatHistory} onSend={onSendMessage} />
+          <ChatTab messages={chatHistory} onSend={onSendMessage} units={units} />
         </div>
         <div style={{ display: activeTab === 'symbols'     ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
           <SymbolLibraryTab />

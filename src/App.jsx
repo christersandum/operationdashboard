@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import ArcGISMap from './components/ArcGISMap';
 import RightPanel from './components/RightPanel';
 import OperationPicker from './components/OperationPicker';
+import WebMapPicker from './components/WebMapPicker';
 import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel, CalciteCheckbox } from '@esri/calcite-components-react';
 
 import {
@@ -13,11 +14,13 @@ import {
   MISSIONS_SWORD_STAGED,
   CHAT_SWORD,
   SEED_CONFIG,
+  ALERTS_SWORD,
 } from './utils/seedData';
 import { formatUTM33 } from './utils/coordUtils';
 import { getPortalUser, createOperationFolder, listOperationFolders, getOperationServiceUrls } from './utils/portalService';
 import { seedNorwegianSword } from './utils/seedMigration';
 import IdentityManager from '@arcgis/core/identity/IdentityManager';
+import Portal from '@arcgis/core/portal/Portal';
 import {
   saveOperation,
   loadOperation as loadOperationFromService,
@@ -82,16 +85,27 @@ export default function App() {
   const [aoVisible,      setAoVisible]      = useState(true);
   const [scenarioEnded,  setScenarioEnded]  = useState(false);
   const [isPlaying,      setIsPlaying]      = useState(true);
-  const [playbackSpeed,  setPlaybackSpeed]  = useState(1);
   const [scenarioProgress, setScenarioProgress] = useState(0);
   const SCENARIO_TOTAL_MS = 205000; // 140s last incident + ~65s for arrival msgs + bank chat
+
+  // Configurable timing settings (Feature 4)
+  const [timingSettings, setTimingSettings] = useState({
+    warningInterval: 30, incidentInterval: 30, unitTravelTime: 35, taskInterval: 20, chatInterval: 15,
+  });
+  const timingSettingsRef = useRef({
+    warningInterval: 30, incidentInterval: 30, unitTravelTime: 35, taskInterval: 20, chatInterval: 15,
+  });
+
+  // Mission positions (Feature 5/6/7) — missionId → { lat, lng }
+  const missionPositionsRef = useRef({});
+  const [missionPositions, setMissionPositions] = useState({});
 
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [sidebarWidth,   setSidebarWidth]   = useState(310);
   const [rightPanelWidth, setRightPanelWidth] = useState(368);
   const [drawAOMode, setDrawAOMode] = useState(false);
   const [aoFirstPoint, setAoFirstPoint] = useState(null);
-  const [alertInterval, setAlertInterval] = useState(10);
+  const [alertInterval, setAlertInterval] = useState(30);
   const [currentAoCoords, setCurrentAoCoords] = useState(null);
   const [newOpDialogOpen, setNewOpDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -104,6 +118,12 @@ export default function App() {
   const [isSignedIn,      setIsSignedIn]      = useState(false);
   const [signingIn,       setSigningIn]       = useState(false);
   const [portalUser,      setPortalUser]      = useState(null);
+
+  // WebMap picker (Feature 1)
+  const [webmapPickerOpen,  setWebmapPickerOpen]  = useState(false);
+  const [webmapList,        setWebmapList]        = useState([]);
+  const [loadingWebmaps,    setLoadingWebmaps]    = useState(false);
+  const [selectedWebmapId,  setSelectedWebmapId]  = useState(null);
 
   // ArcGIS Online service URLs (per-operation folder)
   const [serviceUrls, setServiceUrls] = useState({});
@@ -134,6 +154,7 @@ export default function App() {
   const moveInterval = useRef(null);
   const progressInterval = useRef(null);
   const alertIntervalRef = useRef(null);
+  const alertPoolIndexRef = useRef(0);
   const simStartRef  = useRef(null);
   const viewRef      = useRef(null);
   const unitsRef     = useRef([]);
@@ -143,8 +164,7 @@ export default function App() {
   const activeTabRef = useRef('overview');
   const arrivedRef   = useRef(new Set());
   const isPlayingRef = useRef(true);
-  const playbackSpeedRef = useRef(1);
-  const alertIntervalSecRef = useRef(10);
+  const alertIntervalSecRef = useRef(30);
 
   // Norwegian Sword seed config used as fallback when not signed in
   const opConfig = SEED_CONFIG;
@@ -228,8 +248,10 @@ export default function App() {
     setScenarioProgress(0);
     setIsPlaying(true);
     isPlayingRef.current = true;
-    playbackSpeedRef.current = 1;
-    setPlaybackSpeed(1);
+
+    // Reset mission positions (Feature 5)
+    missionPositionsRef.current = {};
+    setMissionPositions({});
 
     const startTime = Date.now() - (SEED_CONFIG.elapsed || 0);
     setMissionStartTime(startTime);
@@ -252,7 +274,22 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startStagedSimulation(initialUnits, initialIncidents) {
-    INCIDENTS_SWORD_STAGED.forEach((incData) => {
+    // Helper: compute a random position within ~50m of an incident (Feature 5)
+    function randomMissionPos(inc) {
+      const FIFTY_METERS_DEG = 0.00045;
+      const angle = Math.random() * 2 * Math.PI;
+      const r = Math.random() * FIFTY_METERS_DEG;
+      const lat = inc.lat + r * Math.sin(angle);
+      const lng = inc.lng + r * Math.cos(angle) / Math.cos(inc.lat * Math.PI / 180);
+      return { lat, lng };
+    }
+
+    INCIDENTS_SWORD_STAGED.forEach((incData, incIdx) => {
+      // Use configurable incidentInterval (Feature 4); fall back to seed delay
+      const delay = timingSettingsRef.current.incidentInterval > 0
+        ? (incIdx + 1) * timingSettingsRef.current.incidentInterval * 1000
+        : incData.delay;
+
       const t = setTimeout(() => {
         if (unitsRef.current.length === 0) return;
 
@@ -281,6 +318,20 @@ export default function App() {
           incidents: incidentsRef.current.length,
         }));
 
+        // Create missions for this incident and compute random positions (Feature 5)
+        const incMissions = MISSIONS_SWORD_STAGED.filter(m => m.incidentId === incData.id);
+        const newPositions = {};
+        incMissions.forEach(m => {
+          if (!missionPositionsRef.current[m.id]) {
+            const pos = randomMissionPos(incData);
+            newPositions[m.id] = pos;
+            missionPositionsRef.current[m.id] = pos;
+          }
+        });
+        if (Object.keys(newPositions).length > 0) {
+          setMissionPositions(prev => ({ ...prev, ...newPositions }));
+        }
+
         let assignedUnitIds = [];
 
         if (incData.assignAll) {
@@ -292,26 +343,47 @@ export default function App() {
             return u;
           });
 
-          // All non-offline units to bank
-          unitsRef.current = unitsRef.current.map(u => ({
-            ...u,
-            target: { lat: incData.lat, lng: incData.lng },
-            moving: u.status !== 'offline',
-            assignedIncident: u.status !== 'offline' ? incData.id : u.assignedIncident,
-            incidentColorIndex: incData.colorIndex,
-            status: u.status === 'offline' ? 'offline' : 'opptatt',
-          }));
+          // All non-offline units assigned to bank missions
           assignedUnitIds = unitsRef.current.filter(u => u.status !== 'offline').map(u => u.id);
+
+          // Assign each unit to its mission's random position (Feature 7)
+          const missionList = incMissions.map((m, idx) => ({
+            ...m,
+            assignedUnitIds: assignedUnitIds.filter((_, i) => i % incMissions.length === idx),
+          }));
+          unitsRef.current = unitsRef.current.map(u => {
+            if (u.status === 'offline') return u;
+            // Find which mission this unit belongs to
+            const mission = missionList.find(m => m.assignedUnitIds.includes(u.id));
+            const mPos = mission
+              ? (missionPositionsRef.current[mission.id] || { lat: incData.lat, lng: incData.lng })
+              : { lat: incData.lat, lng: incData.lng };
+            return {
+              ...u,
+              target: mPos,
+              moving: true,
+              assignedIncident: incData.id,
+              incidentColorIndex: incData.colorIndex,
+              status: 'opptatt',
+            };
+          });
         } else {
           const toAssign = findClosestFreeUnits(inc, unitsRef.current, 2);
           const assignIds = new Set(toAssign.map(u => u.id));
           assignedUnitIds = [...assignIds];
 
+          // Assign each unit to its mission's random position (Feature 7)
+          let assignIdx = 0;
           unitsRef.current = unitsRef.current.map(u => {
             if (assignIds.has(u.id)) {
+              const missionForUnit = incMissions[assignIdx % incMissions.length];
+              assignIdx++;
+              const mPos = missionForUnit
+                ? (missionPositionsRef.current[missionForUnit.id] || { lat: incData.lat, lng: incData.lng })
+                : { lat: incData.lat, lng: incData.lng };
               return {
                 ...u,
-                target: { lat: incData.lat, lng: incData.lng },
+                target: mPos,
                 moving: true,
                 assignedIncident: incData.id,
                 incidentColorIndex: incData.colorIndex,
@@ -336,8 +408,7 @@ export default function App() {
 
         setUnits([...unitsRef.current]);
 
-        // Create missions for this incident
-        const incMissions = MISSIONS_SWORD_STAGED.filter(m => m.incidentId === incData.id);
+        // Store missions with assigned unit IDs
         const newMissions = incMissions.map((m, idx) => {
           let missionUnits = [];
           if (incData.assignAll) {
@@ -352,14 +423,16 @@ export default function App() {
         setMissions([...missionsRef.current]);
 
         // Incident-specific chat messages
+        const chatIntv = timingSettingsRef.current.chatInterval * 1000 || 4000;
         incData.chatMessages.forEach((msg, msgIdx) => {
           setTimeout(() => {
             addChat({ ...msg, time: nowTime() });
-          }, 3000 + msgIdx * 4000);
+          }, chatIntv + msgIdx * chatIntv);
         });
 
         // Arrival messages
-        const arrivalDelay = incData.assignAll ? 20000 : ARRIVAL_MSG_DELAY;
+        const travelMs = timingSettingsRef.current.unitTravelTime * 1000 || ARRIVAL_MSG_DELAY;
+        const arrivalDelay = incData.assignAll ? Math.min(20000, travelMs) : travelMs;
         incData.arrivalMessages.forEach((msg, msgIdx) => {
           setTimeout(() => {
             addChat({ ...msg, time: nowTime() });
@@ -375,7 +448,7 @@ export default function App() {
             setScenarioEnded(true);
           }, scenarioEndDelay);
         }
-      }, incData.delay);
+      }, delay);
 
       simTimers.current.push(t);
     });
@@ -458,17 +531,23 @@ export default function App() {
     if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
     alertIntervalRef.current = setInterval(() => {
       if (!isPlayingRef.current) return;
-      const messages = [
-        '📋 Oppdragslogg oppdatert — se operasjonsoversikten.',
-      ];
-      const text = messages[Math.floor(Math.random() * messages.length)];
-      addChat({ sender: 'System', initials: '⚙', color: '#f39c12', system: true, text });
+      // Cycle through ALERTS_SWORD pool (Feature 10)
+      const pool = ALERTS_SWORD;
+      if (pool.length > 0) {
+        const alert = pool[alertPoolIndexRef.current % pool.length];
+        alertPoolIndexRef.current++;
+        setStats(prev => ({ ...prev, alerts: prev.alerts + 1 }));
+        addChat({
+          sender: 'System', initials: '⚙', color: alert.icon_color || '#f39c12', system: true,
+          text: `${alert.icon} ${alert.text}`,
+        });
+      }
     }, intervalSec * 1000);
   }
 
   useEffect(() => {
     loadOperation();
-    startAlertInterval(10);
+    startAlertInterval(timingSettingsRef.current.warningInterval);
 
     // Silently check if already signed in (e.g. from a previous session)
     IdentityManager.checkSignInStatus('https://beredskap.maps.arcgis.com/sharing/rest')
@@ -500,6 +579,27 @@ export default function App() {
       const user = await getPortalUser();
       setPortalUser(user);
       addSystemChat('✅ Logget inn som ' + (user?.fullName || user?.username || 'bruker'), '#2ecc71');
+
+      // Feature 1: Query portal for webmaps and show picker
+      setLoadingWebmaps(true);
+      setWebmapPickerOpen(true);
+      try {
+        const portal = new Portal({ url: 'https://beredskap.maps.arcgis.com' });
+        await portal.load();
+        const result = await portal.queryItems({ query: 'type:"Web Map"', num: 20 });
+        const items = (result.results || []).map(item => ({
+          id: item.id,
+          title: item.title,
+          snippet: item.snippet,
+          thumbnailUrl: item.thumbnailUrl,
+        }));
+        setWebmapList(items);
+      } catch (err) {
+        console.warn('[App] Could not query webmaps:', err);
+        setWebmapList([]);
+      } finally {
+        setLoadingWebmaps(false);
+      }
     } catch (err) {
       console.warn('[App] Login cancelled or failed:', err);
       if (err?.name !== 'identity-manager:not-authenticated') {
@@ -542,16 +642,6 @@ export default function App() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSpeedChange = useCallback((speed) => {
-    playbackSpeedRef.current = speed;
-    setPlaybackSpeed(speed);
-    // Adjust movement interval speed
-    if (moveInterval.current) {
-      clearInterval(moveInterval.current);
-      moveInterval.current = setInterval(() => { tickMovement(); }, Math.max(500, 3000 / speed));
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleOperationChange = useCallback(() => {
     loadOperation();
   }, [loadOperation]);
@@ -573,8 +663,27 @@ export default function App() {
     setMapZoom(14);
   }, []);
 
-  const handleSendMessage = useCallback((text) => {
-    addChat({ sender: 'Deg', initials: 'AU', color: '#0078d4', self: true, text });
+  // Feature 6: Click task in panel → zoom to task on map
+  const handleMissionClick = useCallback((mission) => {
+    const pos = missionPositionsRef.current[mission.id];
+    if (pos) {
+      setMapCenter([pos.lng, pos.lat]);
+      setMapZoom(17);
+    } else {
+      // Fall back to incident position
+      const inc = incidentsRef.current.find(i => i.id === mission.incidentId);
+      if (inc) {
+        setMapCenter([inc.lng, inc.lat]);
+        setMapZoom(15);
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSendMessage = useCallback((text, recipients) => {
+    addChat({
+      sender: 'Deg', initials: 'AU', color: '#0078d4', self: true, text,
+      recipients: recipients || null,
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBroadcast = useCallback(() => setBroadcastOpen(true), []);
@@ -709,11 +818,13 @@ export default function App() {
     setStats(prev => ({ ...prev, incidents: incidentsRef.current.length }));
   }, []);
 
-  // Shared helper: dispatch a set of unit IDs to an incident location
-  function dispatchUnitsToIncident(unitIds, inc) {
+  // Shared helper: dispatch a set of unit IDs to a mission's position (Feature 7)
+  // missionPos: { lat, lng } — the mission's map position (random 50m offset)
+  function dispatchUnitsToMission(unitIds, mission, inc) {
+    const mPos = missionPositionsRef.current[mission.id] || { lat: inc.lat, lng: inc.lng };
     unitsRef.current = unitsRef.current.map(u => {
       if (unitIds.includes(u.id)) {
-        return { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 };
+        return { ...u, target: mPos, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 };
       }
       return u;
     });
@@ -723,8 +834,20 @@ export default function App() {
   const handleAddMission = useCallback((missionData) => {
     const newMission = { ...missionData, assignedUnitIds: missionData.assignedUnitIds || [] };
     const inc = incidentsRef.current.find(i => i.id === missionData.incidentId);
+
+    // Compute random position for the new mission if not already set (Feature 5)
+    if (inc && !missionPositionsRef.current[newMission.id]) {
+      const FIFTY_METERS_DEG = 0.00045;
+      const angle = Math.random() * 2 * Math.PI;
+      const r = Math.random() * FIFTY_METERS_DEG;
+      const lat = inc.lat + r * Math.sin(angle);
+      const lng = inc.lng + r * Math.cos(angle) / Math.cos(inc.lat * Math.PI / 180);
+      missionPositionsRef.current[newMission.id] = { lat, lng };
+      setMissionPositions(prev => ({ ...prev, [newMission.id]: { lat, lng } }));
+    }
+
     if (inc && newMission.assignedUnitIds.length > 0) {
-      dispatchUnitsToIncident(newMission.assignedUnitIds, inc);
+      dispatchUnitsToMission(newMission.assignedUnitIds, newMission, inc);
     }
     missionsRef.current = [...missionsRef.current, newMission];
     setMissions([...missionsRef.current]);
@@ -746,7 +869,10 @@ export default function App() {
     const newlyAssigned = newAssigned.filter(id => !oldAssigned.includes(id));
     if (newlyAssigned.length > 0) {
       const inc = incidentsRef.current.find(i => i.id === (changes.incidentId || oldMission?.incidentId));
-      if (inc) dispatchUnitsToIncident(newlyAssigned, inc);
+      if (inc) {
+        const mission = { ...oldMission, ...changes, id: missionId };
+        dispatchUnitsToMission(newlyAssigned, mission, inc);
+      }
     }
     missionsRef.current = missionsRef.current.map(m => m.id === missionId ? { ...m, ...changes } : m);
     setMissions([...missionsRef.current]);
@@ -768,7 +894,8 @@ export default function App() {
       const closest = free.map(u => ({ unit: u, dist: calcDist(u, inc) })).sort((a, b) => a.dist - b.dist)[0];
       if (!closest) return;
       const uid = closest.unit.id;
-      unitsRef.current = unitsRef.current.map(u => u.id === uid ? { ...u, target: { lat: inc.lat, lng: inc.lng }, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 } : u);
+      const mPos = missionPositionsRef.current[mission.id] || { lat: inc.lat, lng: inc.lng };
+      unitsRef.current = unitsRef.current.map(u => u.id === uid ? { ...u, target: mPos, moving: true, assignedIncident: inc.id, status: 'opptatt', incidentColorIndex: inc.colorIndex ?? 0 } : u);
       missionsRef.current = missionsRef.current.map(m => m.id === mission.id ? { ...m, assignedUnitIds: [uid] } : m);
       changed = true;
     });
@@ -1059,13 +1186,15 @@ export default function App() {
         onDrawAO={() => { setDrawAOMode(v => !v); setAoFirstPoint(null); }}
         drawAOMode={drawAOMode}
         onSettingsChange={(s) => {
-          if (s.alertInterval !== undefined) {
-            setAlertInterval(s.alertInterval);
-            alertIntervalSecRef.current = s.alertInterval;
-            startAlertInterval(s.alertInterval);
+          const merged = { ...timingSettingsRef.current, ...s };
+          timingSettingsRef.current = merged;
+          setTimingSettings(merged);
+          if (s.warningInterval !== undefined) {
+            alertIntervalSecRef.current = s.warningInterval;
+            startAlertInterval(s.warningInterval);
           }
         }}
-        timingConfig={{ alertInterval }}
+        timingConfig={timingSettings}
         portalUser={portalUser}
         isSignedIn={isSignedIn}
         signingIn={signingIn}
@@ -1084,11 +1213,18 @@ export default function App() {
           missionStartTime={missionStartTime}
           onUnitClick={handleUnitClick}
           onIncidentClick={handleIncidentClick}
+          onMissionClick={handleMissionClick}
           onSendMessage={handleSendMessage}
           unreadChat={unreadChat}
           unreadIncidents={unreadIncidents}
           onTabChange={handleTabChange}
           width={sidebarWidth}
+        />
+        {/* Sidebar resize handle (Feature 3) */}
+        <div
+          className="panel-resize-handle vertical left"
+          onMouseDown={handleSidebarResizeStart}
+          title="Dra for å endre bredde"
         />
         {/* Map area */}
         <div className="map-area">
@@ -1096,19 +1232,33 @@ export default function App() {
             center={mapCenter}
             zoom={mapZoom}
             basemap={basemap}
+            webmapId={selectedWebmapId}
             units={unitsVisible ? units : []}
             incidents={incidentsVisible ? incidents : []}
             missions={missionsVisible ? missions : []}
+            missionPositions={missionPositions}
             aoCoords={currentAoCoords || opConfig.aoCoords}
             aoLabel={opConfig.aoLabel}
             aoVisible={aoVisible}
             isSignedIn={isSignedIn}
+            onViewReady={(v) => { viewRef.current = v; }}
             onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
             onZoomChange={setCurrentZoom}
             drawAOMode={drawAOMode}
             onMapClick={handleMapClick}
             skolerBarnehagerVisible={skolerBarnehagerVisible}
+            unitsVisible={unitsVisible}
+            incidentsVisible={incidentsVisible}
+            missionsVisible={missionsVisible}
+            aoVisible={aoVisible}
+            onUnitsVisibleChange={setUnitsVisible}
+            onIncidentsVisibleChange={setIncidentsVisible}
+            onMissionsVisibleChange={setMissionsVisible}
+            onAoVisibleChange={setAoVisible}
+            onSkolerVisibleChange={setSkolerBarnehagerVisible}
             pickingLocation={pickingLocation}
+            isPlaying={isPlaying}
+            onPlayPause={handlePlayPause}
           />
 
           {/* Toolbar */}
@@ -1262,31 +1412,22 @@ export default function App() {
             </div>
           )}
 
-          {/* Time Player - always visible */}
-          <div className="time-player">
-            <button className="time-player-btn" onClick={handlePlayPause} title={isPlaying ? 'Pause' : 'Spill av'}>
-              {isPlaying ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-                </svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-              )}
-            </button>
-            <div className="time-player-speeds">
-              {[1, 2, 4].map(s => (
-                <button
-                  key={s}
-                  className={`time-player-speed-btn${playbackSpeed === s ? ' active' : ''}`}
-                  onClick={() => handleSpeedChange(s)}
-                >
-                  {s}x
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Play/Pause button — bottom-left of map (Feature 9) */}
+          <button
+            className="map-play-pause-btn"
+            onClick={handlePlayPause}
+            title={isPlaying ? 'Pause simulasjon' : 'Start simulasjon'}
+          >
+            {isPlaying ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            )}
+          </button>
         </div>
 
         {/* Right panel resize handle */}
@@ -1446,6 +1587,23 @@ export default function App() {
           Avbryt
         </CalciteButton>
       </CalciteDialog>
+
+      {/* WebMap Picker (Feature 1) */}
+      <WebMapPicker
+        open={webmapPickerOpen}
+        webmaps={webmapList}
+        loading={loadingWebmaps}
+        onSelect={(id) => {
+          setSelectedWebmapId(id);
+          setWebmapPickerOpen(false);
+          addSystemChat(`🗺 Webkart valgt og lastet (ID: ${id}).`, '#2ecc71');
+        }}
+        onSkip={() => {
+          setWebmapPickerOpen(false);
+          addSystemChat('🗺 Bruker standard kartbakgrunn.', '#6b7280');
+        }}
+        onClose={() => setWebmapPickerOpen(false)}
+      />
 
       {(layerPanelOpen || basemapSelectorOpen) && (
         <div

@@ -1798,3 +1798,143 @@ arcgis-map {
   background: var(--border-color);
   margin: 4px 0;
 }
+
+/* ── Map Layer Dropdowns (Feature 8) ─────────────────────── */
+.map-layer-dropdown {
+  pointer-events: all;
+}
+.map-layer-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 26, 36, 0.92);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  min-width: 140px;
+}
+.map-layer-dropdown-btn:hover,
+.map-layer-dropdown-btn.active {
+  border-color: var(--accent-blue);
+  background: rgba(0,120,212,0.15);
+}
+.map-layer-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: rgba(22, 26, 36, 0.97);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+}
+.map-layer-dropdown-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* ── Large Play/Pause button (Feature 9) ─────────────────── */
+.map-play-pause-btn {
+  position: absolute;
+  bottom: 24px;
+  left: 16px;
+  z-index: 20;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  border: 2px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,120,212,0.5);
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.map-play-pause-btn:hover {
+  background: #0063b1;
+  transform: scale(1.07);
+  box-shadow: 0 6px 20px rgba(0,120,212,0.6);
+}
+.map-play-pause-btn:active {
+  transform: scale(0.97);
+}
+
+/* ── Chat recipient picker (Feature 12) ──────────────────── */
+.chat-recipient-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.chat-recipient-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+.chat-recipient-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px;
+  z-index: 50;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+}
+.chat-recipient-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.chat-recipient-option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.chat-recipient-option input[type=checkbox] {
+  margin: 0;
+}
+.chat-recipient-team {
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+.chat-msg-recipients {
+  font-size: 10px;
+  color: var(--accent-blue);
+  margin-bottom: 2px;
+  font-style: italic;
+}
