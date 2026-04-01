@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { INCIDENT_COLORS } from '../../data';
 
+const TEAM_UNKNOWN = 'Ukjent';
+
 export default function UnitsTab({ units, incidents, onUnitClick }) {
   const [query,  setQuery]  = useState('');
   const [filter, setFilter] = useState('all');
@@ -28,7 +30,7 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
   const teamGroups = useMemo(() => {
     const map = {};
     filtered.forEach(u => {
-      const team = u.team || 'Ukjent';
+      const team = u.team || TEAM_UNKNOWN;
       if (!map[team]) map[team] = [];
       map[team].push(u);
     });

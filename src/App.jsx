@@ -275,8 +275,9 @@ export default function App() {
 
   function startStagedSimulation(initialUnits, initialIncidents) {
     // Helper: compute a random position within ~50m of an incident (Feature 5)
+    // 0.00045 degrees ≈ 50 meters at Oslo's latitude (~60°N)
+    const FIFTY_METERS_DEG = 0.00045;
     function randomMissionPos(inc) {
-      const FIFTY_METERS_DEG = 0.00045;
       const angle = Math.random() * 2 * Math.PI;
       const r = Math.random() * FIFTY_METERS_DEG;
       const lat = inc.lat + r * Math.sin(angle);
@@ -836,6 +837,7 @@ export default function App() {
     const inc = incidentsRef.current.find(i => i.id === missionData.incidentId);
 
     // Compute random position for the new mission if not already set (Feature 5)
+    // 0.00045 degrees ≈ 50 meters at Oslo's latitude (~60°N)
     if (inc && !missionPositionsRef.current[newMission.id]) {
       const FIFTY_METERS_DEG = 0.00045;
       const angle = Math.random() * 2 * Math.PI;

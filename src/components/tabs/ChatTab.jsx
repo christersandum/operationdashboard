@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 
+const RECIPIENT_ALL = RECIPIENT_ALL;
+
 export default function ChatTab({ messages, onSend, units }) {
   const [inputText, setInputText]   = useState('');
-  const [recipients, setRecipients] = useState(['Alle']);
+  const [recipients, setRecipients] = useState([RECIPIENT_ALL]);
   const [recipientOpen, setRecipientOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef    = useRef(null);
@@ -30,7 +32,7 @@ export default function ChatTab({ messages, onSend, units }) {
     const teams = new Set();
     (units || []).forEach(u => { if (u.team) teams.add(u.team); });
     const opts = [
-      { id: 'Alle', label: 'Alle (kringkast)', isTeam: true },
+      { id: RECIPIENT_ALL, label: 'Alle (kringkast)', isTeam: true },
       ...Array.from(teams).map(t => ({ id: t, label: `Team: ${t}`, isTeam: true })),
       ...(units || []).map(u => ({ id: u.id, label: `${u.id} — ${u.name}`, isTeam: false })),
     ];
@@ -38,31 +40,31 @@ export default function ChatTab({ messages, onSend, units }) {
   }, [units]);
 
   const toggleRecipient = (id) => {
-    if (id === 'Alle') {
-      setRecipients(['Alle']);
+    if (id === RECIPIENT_ALL) {
+      setRecipients([RECIPIENT_ALL]);
       return;
     }
     setRecipients(prev => {
-      const without = prev.filter(r => r !== 'Alle');
+      const without = prev.filter(r => r !== RECIPIENT_ALL);
       if (without.includes(id)) {
         const next = without.filter(r => r !== id);
-        return next.length === 0 ? ['Alle'] : next;
+        return next.length === 0 ? [RECIPIENT_ALL] : next;
       }
       return [...without, id];
     });
   };
 
-  const recipientLabel = recipients.includes('Alle')
-    ? 'Alle'
+  const recipientLabel = recipients.includes(RECIPIENT_ALL)
+    ? RECIPIENT_ALL
     : recipients.join(', ');
 
   const handleSend = () => {
     const text = inputText.trim();
     if (!text) return;
-    const toAll = recipients.includes('Alle') || recipients.length === 0;
+    const toAll = recipients.includes(RECIPIENT_ALL) || recipients.length === 0;
     onSend(text, toAll ? null : recipients);
     setInputText('');
-    setRecipients(['Alle']);
+    setRecipients([RECIPIENT_ALL]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
@@ -126,7 +128,7 @@ export default function ChatTab({ messages, onSend, units }) {
                 <label key={opt.id} className="chat-recipient-option">
                   <input
                     type="checkbox"
-                    checked={recipients.includes(opt.id) || (opt.id === 'Alle' && recipients.includes('Alle'))}
+                    checked={recipients.includes(opt.id) || (opt.id === RECIPIENT_ALL && recipients.includes(RECIPIENT_ALL))}
                     onChange={() => toggleRecipient(opt.id)}
                   />
                   <span className={opt.isTeam ? 'chat-recipient-team' : ''}>{opt.label}</span>
