@@ -32,7 +32,7 @@ const LIGHT_BASEMAP_TEMPLATE = 'https://{subDomain}.basemaps.cartocdn.com/light_
 const BASEMAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>';
 
 // ── Helper: build a Basemap instance ────────────────────────
-function buildOfflineBasemap(basemapId) {
+function buildBasemap(basemapId) {
   const urlTemplate = basemapId === 'light' ? LIGHT_BASEMAP_TEMPLATE : DARK_BASEMAP_TEMPLATE;
   return new Basemap({
     baseLayers: [new WebTileLayer({ urlTemplate, subDomains: ['a', 'b', 'c', 'd'], copyright: BASEMAP_ATTRIBUTION })],
@@ -142,7 +142,7 @@ export default function ArcGISMap({
       map.add(unitLayer);
     } else {
       map = new Map({
-        basemap: buildOfflineBasemap(basemap),
+        basemap: buildBasemap(basemap),
         layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
       });
     }
@@ -248,13 +248,13 @@ export default function ArcGISMap({
     }
   }, [pickingLocation]);
 
-  // ── Basemap switch (offline fallback only — portal BasemapGallery handles online) ─
+  // ── Basemap switch (CartoDB tiles — portal BasemapGallery handles online) ─
   useEffect(() => {
     if (!mapRef.current) return;
     if (basemap === basemapRef.current) return;
-    // Only switch using offline basemaps when not signed in
+    // Only switch using CartoDB basemap when not signed in
     if (!basemapGalleryRef.current) {
-      mapRef.current.basemap = buildOfflineBasemap(basemap);
+      mapRef.current.basemap = buildBasemap(basemap);
     }
     basemapRef.current = basemap;
   }, [basemap]);
@@ -275,8 +275,8 @@ export default function ArcGISMap({
       viewRef.current.ui.remove(basemapGalleryRef.current);
       basemapGalleryRef.current.destroy();
       basemapGalleryRef.current = null;
-      // Restore offline basemap
-      if (mapRef.current) mapRef.current.basemap = buildOfflineBasemap(basemapRef.current);
+      // Restore CartoDB basemap
+      if (mapRef.current) mapRef.current.basemap = buildBasemap(basemapRef.current);
     }
   }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
