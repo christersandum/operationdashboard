@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 
-export default function MissionsTab({ missions, units, incidents }) {
+export default function MissionsTab({ missions, units, incidents, onMissionClick }) {
   const openCount = missions.filter(m => m.status !== 'completed').length;
 
   const grouped = useMemo(() => {
@@ -38,7 +38,12 @@ export default function MissionsTab({ missions, units, incidents }) {
               const assignedUnits = units.filter(u => mission.assignedUnitIds && mission.assignedUnitIds.includes(u.id));
               const completed = mission.status === 'completed';
               return (
-                <div key={mission.id} className={`mission-item${completed ? ' completed' : ''}`}>
+                <div
+                  key={mission.id}
+                  className={`mission-item${completed ? ' completed' : ''}`}
+                  onClick={() => onMissionClick && onMissionClick(mission)}
+                  style={{ cursor: onMissionClick ? 'pointer' : 'default' }}
+                >
                   <div className="mission-status-dot" style={{ background: completed ? '#2ecc71' : '#e74c3c' }} />
                   <div className="mission-body">
                     <div className="mission-title">{mission.title}</div>

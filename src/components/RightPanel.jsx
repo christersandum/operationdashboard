@@ -48,7 +48,7 @@ export default function RightPanel({
   const [activeTab, setActiveTab] = useState('units');
 
   // Unit form — stores UTM33 easting/northing as strings
-  const [unitForm, setUnitForm] = useState({ id: '', name: '', role: '', status: 'online', utmE: '', utmN: '' });
+  const [unitForm, setUnitForm] = useState({ id: '', name: '', role: '', team: '', status: 'online', utmE: '', utmN: '' });
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [editUnitId, setEditUnitId] = useState(null);
 
@@ -77,13 +77,13 @@ export default function RightPanel({
 
   // ── Unit helpers ──────────────────────────────────────────
   const openAddUnit = () => {
-    setUnitForm({ id: '', name: '', role: '', status: 'online', utmE: '', utmN: '' });
+    setUnitForm({ id: '', name: '', role: '', team: '', status: 'online', utmE: '', utmN: '' });
     setEditUnitId(null);
     setShowUnitForm(true);
   };
   const openEditUnit = (unit) => {
     const { e, n } = latLngToUtmStrings(unit.lat, unit.lng);
-    setUnitForm({ id: unit.id, name: unit.name, role: unit.role, status: unit.status, utmE: e, utmN: n });
+    setUnitForm({ id: unit.id, name: unit.name, role: unit.role, team: unit.team || '', status: unit.status, utmE: e, utmN: n });
     setEditUnitId(unit.id);
     setShowUnitForm(true);
   };
@@ -106,6 +106,7 @@ export default function RightPanel({
       id: unitForm.id,
       name: unitForm.name,
       role: unitForm.role,
+      team: unitForm.team,
       status: unitForm.status,
       lat,
       lng,
@@ -238,6 +239,7 @@ export default function RightPanel({
                     <input className="rp-input" placeholder="ID (f.eks P5)" value={unitForm.id} onChange={e => setUnitForm(f => ({ ...f, id: e.target.value }))} disabled={!!editUnitId} />
                     <input className="rp-input" placeholder="Navn" value={unitForm.name} onChange={e => setUnitForm(f => ({ ...f, name: e.target.value }))} />
                     <input className="rp-input" placeholder="Rolle" value={unitForm.role} onChange={e => setUnitForm(f => ({ ...f, role: e.target.value }))} />
+                    <input className="rp-input" placeholder="Team (f.eks Patrulje, Delta)" value={unitForm.team} onChange={e => setUnitForm(f => ({ ...f, team: e.target.value }))} />
                     <select className="rp-input" value={unitForm.status} onChange={e => setUnitForm(f => ({ ...f, status: e.target.value }))}>
                       <option value="online">Online / Ledig</option>
                       <option value="opptatt">Opptatt</option>
@@ -266,7 +268,7 @@ export default function RightPanel({
                       <div className="rp-item-info">
                         <span className="rp-item-id">{u.id}</span>
                         <span className="rp-item-name">{u.name}</span>
-                        <span className="rp-item-sub">{u.role} · {u.status}</span>
+                        <span className="rp-item-sub">{u.role}{u.team ? ` · ${u.team}` : ''} · {u.status}</span>
                       </div>
                       <div className="rp-item-actions">
                         <button className="rp-icon-btn" title="Rediger" aria-label={`Rediger enhet ${u.name}`} onClick={() => openEditUnit(u)}>✏</button>

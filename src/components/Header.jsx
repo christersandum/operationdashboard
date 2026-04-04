@@ -48,7 +48,7 @@ export default function Header({
   const settingsRef  = useRef(null);
 
   const defaultSettings = {
-    firstDelay: 15, interval: 30, travelTime: 35, bankChatDuration: 30, alertInterval: 10,
+    warningInterval: 30, incidentInterval: 30, unitTravelTime: 35, taskInterval: 20, chatInterval: 15,
   };
   const [settings, setSettings] = useState({ ...defaultSettings, ...(timingConfig || {}) });
 
@@ -213,11 +213,11 @@ export default function Header({
                 ⚙ Innstillinger
               </div>
               {[
-                { key: 'firstDelay',       label: 'Forsinkelse før første hendelse (sek)' },
-                { key: 'interval',         label: 'Intervall mellom hendelser (sek)' },
-                { key: 'travelTime',       label: 'Reisetid for enheter (sek)' },
-                { key: 'bankChatDuration', label: 'Bankran chat-varighet (sek)' },
-                { key: 'alertInterval',    label: 'Varslingsintervall (sek)' },
+                { key: 'warningInterval',  label: 'Tid mellom varsler (sek)'         },
+                { key: 'incidentInterval', label: 'Tid mellom hendelser (sek)'        },
+                { key: 'unitTravelTime',   label: 'Reisetid for enheter (sek)'        },
+                { key: 'taskInterval',     label: 'Tid mellom oppdrag (sek)'          },
+                { key: 'chatInterval',     label: 'Tid mellom chat-meldinger (sek)'   },
               ].map(({ key, label }) => (
                 <div key={key} style={{ marginBottom: '8px' }}>
                   <CalciteLabel scale="s">

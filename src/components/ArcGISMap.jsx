@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Map from '@arcgis/core/Map';
+import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
 import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
@@ -28,10 +29,6 @@ import { wgs84ToUTM33N } from '../utils/coordUtils';
 const DARK_BASEMAP_URL  = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer';
 const LIGHT_BASEMAP_URL = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer';
 
-// Mission marker positioning: offset from incident so markers don't overlap
-const MISSION_MARKER_OFFSET = 0.001; // ~100 m in degrees
-const MISSION_GRID_COLS     = 3;     // arrange markers in 3-column grid
-
 // ── Helper: build a Basemap instance for offline fallback ────
 function buildOfflineBasemap(basemapId) {
   const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
@@ -45,6 +42,7 @@ export default function ArcGISMap({
   units,
   incidents,
   missions,
+  missionPositions,
   aoCoords,
   aoLabel,
   aoVisible,
@@ -56,6 +54,16 @@ export default function ArcGISMap({
   skolerBarnehagerVisible,
   pickingLocation,
   isSignedIn,
+  webmapId,
+  // Layer visibility callbacks (Feature 8)
+  unitsVisible,
+  incidentsVisible,
+  missionsVisible,
+  onUnitsVisibleChange,
+  onIncidentsVisibleChange,
+  onMissionsVisibleChange,
+  onAoVisibleChange,
+  onSkolerVisibleChange,
 }) {
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
@@ -65,6 +73,16 @@ export default function ArcGISMap({
   const basemapRef  = useRef(basemap);
   const basemapGalleryRef = useRef(null);
   const isSignedInRef = useRef(isSignedIn);
+
+  // Feature 8: two dropdown states
+  const [kartlagOpen, setKartlagOpen] = useState(false);
+  const [opsdataOpen, setOpsdataOpen] = useState(false);
+  // Internal visibility state (synced from props)
+  const [localUnitsVisible, setLocalUnitsVisible] = useState(unitsVisible !== false);
+  const [localIncidentsVisible, setLocalIncidentsVisible] = useState(incidentsVisible !== false);
+  const [localMissionsVisible, setLocalMissionsVisible] = useState(missionsVisible !== false);
+  const [localAoVisible, setLocalAoVisible] = useState(aoVisible !== false);
+  const [localSkolerVisible, setLocalSkolerVisible] = useState(!!skolerBarnehagerVisible);
 
   const skolerLayerRef   = useRef(null);
   const unitLayerRef     = useRef(null);
@@ -100,20 +118,30 @@ export default function ArcGISMap({
     skolerLayerRef.current = skolerLayer;
 
     // ── Operational graphics layers ──────────────────────────
-    const unitLayer     = new GraphicsLayer({ id: 'units' });
-    const incidentLayer = new GraphicsLayer({ id: 'incidents' });
-    const missionLayer  = new GraphicsLayer({ id: 'missions' });
-    const aoLayer       = new GraphicsLayer({ id: 'ao' });
+    const unitLayer     = new GraphicsLayer({ id: 'units',     title: 'Enheter'   });
+    const incidentLayer = new GraphicsLayer({ id: 'incidents', title: 'Hendelser' });
+    const missionLayer  = new GraphicsLayer({ id: 'missions',  title: 'Oppdrag'   });
+    const aoLayer       = new GraphicsLayer({ id: 'ao',        title: 'AO-område' });
     unitLayerRef.current     = unitLayer;
     incidentLayerRef.current = incidentLayer;
     missionLayerRef.current  = missionLayer;
     aoLayerRef.current       = aoLayer;
 
-    // ── Map with initial basemap ─────────────────────────────
-    const map = new Map({
-      basemap: buildOfflineBasemap(basemap),
-      layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
-    });
+    // ── Map: use WebMap if webmapId is given (Feature 1), else offline basemap ──
+    let map;
+    if (webmapId) {
+      map = new WebMap({ portalItem: { id: webmapId } });
+      map.add(skolerLayer);
+      map.add(aoLayer);
+      map.add(missionLayer);
+      map.add(incidentLayer);
+      map.add(unitLayer);
+    } else {
+      map = new Map({
+        basemap: buildOfflineBasemap(basemap),
+        layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
+      });
+    }
     mapRef.current = map;
 
     // ── MapView ──────────────────────────────────────────────
@@ -123,6 +151,7 @@ export default function ArcGISMap({
       center,
       zoom,
       ui: { components: ['zoom'] },
+      popup: { dockEnabled: true, dockOptions: { position: 'top-right', breakpoint: false } },
     });
     viewRef.current = view;
 
@@ -353,20 +382,20 @@ export default function ArcGISMap({
     });
   }, [incidents]);
 
-  // ── Mission graphics ────────────────────────────────────────
+  // ── Mission graphics — use missionPositions for random placement (Feature 5) ──
   useEffect(() => {
     if (!missionLayerRef.current || !incidents) return;
     const layer = missionLayerRef.current;
     const existingIds = new Set(Object.keys(missionGraphicsRef.current));
 
-    (missions || []).forEach((mission, idx) => {
+    (missions || []).forEach((mission) => {
       const inc = incidents.find(i => i.id === mission.incidentId);
       if (!inc) return;
 
-      const offsetLat = inc.lat + MISSION_MARKER_OFFSET * (idx % MISSION_GRID_COLS - 1);
-      const offsetLng = inc.lng + MISSION_MARKER_OFFSET * Math.floor(idx / MISSION_GRID_COLS);
+      // Use provided random position or fall back to incident location
+      const pos = (missionPositions && missionPositions[mission.id]) || { lat: inc.lat, lng: inc.lng };
 
-      const pt = new Point({ longitude: offsetLng, latitude: offsetLat, spatialReference: { wkid: 4326 } });
+      const pt = new Point({ longitude: pos.lng, latitude: pos.lat, spatialReference: { wkid: 4326 } });
       const completed = mission.status === 'completed';
 
       if (missionGraphicsRef.current[mission.id]) {
@@ -382,6 +411,7 @@ export default function ArcGISMap({
             title: `📋 ${mission.title}`,
             content: `<table style="font-size:12px; color:#e8eaf0; width:100%;">
               <tr><td style="color:#9aa3b5">Status</td><td>${completed ? '✅ Fullført' : '🔴 Aktiv'}</td></tr>
+              <tr><td style="color:#9aa3b5">Hendelse</td><td>${inc.title}</td></tr>
               <tr><td colspan="2" style="color:#9aa3b5; padding-top:4px">${mission.desc}</td></tr>
             </table>`,
           }),
@@ -397,10 +427,84 @@ export default function ArcGISMap({
       if (g) layer.remove(g);
       delete missionGraphicsRef.current[id];
     });
-  }, [missions, incidents]);
+  }, [missions, incidents, missionPositions]);
+
+  // ── Helper: toggle layer visibility from dropdown ──────────
+  const handleUnitsToggle   = (v) => { setLocalUnitsVisible(v);     if (unitLayerRef.current) unitLayerRef.current.visible = v;     if (onUnitsVisibleChange) onUnitsVisibleChange(v); };
+  const handleIncToggle     = (v) => { setLocalIncidentsVisible(v); if (incidentLayerRef.current) incidentLayerRef.current.visible = v; if (onIncidentsVisibleChange) onIncidentsVisibleChange(v); };
+  const handleMissionsToggle = (v) => { setLocalMissionsVisible(v);  if (missionLayerRef.current) missionLayerRef.current.visible = v;  if (onMissionsVisibleChange) onMissionsVisibleChange(v); };
+  const handleAoToggle      = (v) => { setLocalAoVisible(v);        if (aoLayerRef.current) aoLayerRef.current.visible = v;           if (onAoVisibleChange) onAoVisibleChange(v); };
+  const handleSkolerToggle  = (v) => { setLocalSkolerVisible(v);    if (skolerLayerRef.current) skolerLayerRef.current.visible = v;    if (onSkolerVisibleChange) onSkolerVisibleChange(v); };
 
   return (
-    <div ref={mapDivRef} style={{ width: '100%', height: '100%' }} />
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div ref={mapDivRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* Feature 8: Operasjonsdata dropdown — top-left */}
+      <div className="map-layer-dropdown" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}>
+        <button
+          className={`map-layer-dropdown-btn${opsdataOpen ? ' active' : ''}`}
+          onClick={() => { setOpsdataOpen(v => !v); setKartlagOpen(false); }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+          </svg>
+          Operasjonsdata
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points={opsdataOpen ? '18 15 12 9 6 15' : '6 9 12 15 18 9'}/>
+          </svg>
+        </button>
+        {opsdataOpen && (
+          <div className="map-layer-dropdown-panel" onClick={e => e.stopPropagation()}>
+            <div className="map-layer-dropdown-title">Operasjonsdata</div>
+            <label className="layer-item">
+              <input type="checkbox" checked={localUnitsVisible} onChange={e => handleUnitsToggle(e.target.checked)} />
+              👮 Enheter
+            </label>
+            <label className="layer-item">
+              <input type="checkbox" checked={localIncidentsVisible} onChange={e => handleIncToggle(e.target.checked)} />
+              ❗ Hendelser
+            </label>
+            <label className="layer-item">
+              <input type="checkbox" checked={localMissionsVisible} onChange={e => handleMissionsToggle(e.target.checked)} />
+              📋 Oppdrag
+            </label>
+            <label className="layer-item">
+              <input type="checkbox" checked={localAoVisible} onChange={e => handleAoToggle(e.target.checked)} />
+              🗺 AO-område
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Feature 8: Kartlag dropdown — top-left (below Operasjonsdata) */}
+      <div className="map-layer-dropdown" style={{ position: 'absolute', top: '52px', left: '10px', zIndex: 10 }}>
+        <button
+          className={`map-layer-dropdown-btn${kartlagOpen ? ' active' : ''}`}
+          onClick={() => { setKartlagOpen(v => !v); setOpsdataOpen(false); }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+          Kartlag
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points={kartlagOpen ? '18 15 12 9 6 15' : '6 9 12 15 18 9'}/>
+          </svg>
+        </button>
+        {kartlagOpen && (
+          <div className="map-layer-dropdown-panel" onClick={e => e.stopPropagation()}>
+            <div className="map-layer-dropdown-title">Kartlag</div>
+            <label className="layer-item">
+              <input type="checkbox" checked={localSkolerVisible} onChange={e => handleSkolerToggle(e.target.checked)} />
+              🏫 Skoler og barnehager
+            </label>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
