@@ -13,14 +13,19 @@ import { wgs84ToUTM33N, utm33NToWGS84 } from './coordUtils';
 const SR_25833 = { wkid: 25833 };
 
 // ── Lazy-init FeatureLayer references ────────────────────────
-const _layers = {};
+const _layerCache = new Map();
 
 function getLayer(url) {
   if (!url) throw new Error('Feature Service URL is not set');
-  if (!_layers[url]) {
-    _layers[url] = new FeatureLayer({ url });
+  if (!_layerCache.has(url)) {
+    _layerCache.set(url, new FeatureLayer({ url }));
   }
-  return _layers[url];
+  return _layerCache.get(url);
+}
+
+/** Clear all cached FeatureLayer instances (e.g., on logout) */
+export function clearLayerCache() {
+  _layerCache.clear();
 }
 
 // ── Convert WGS84 point to UTM33N Point geometry ─────────────
@@ -49,6 +54,14 @@ function escapeWhere(value) {
 // ── Build a WHERE clause for Operation_id filtering ──────────
 function opWhere(operationId) {
   return `Operation_id = '${escapeWhere(operationId)}'`;
+}
+
+// ── Validate applyEdits results and surface any errors ───────
+function checkEditResults(results, operation) {
+  const errors = (results || []).filter(r => r?.error);
+  if (errors.length > 0) {
+    throw new Error(`${operation} had ${errors.length} error(s): ${JSON.stringify(errors[0].error)}`);
+  }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -128,7 +141,11 @@ export async function saveUnits(url, units, operationId, operationName, overwrit
       },
     });
   });
-  if (adds.length > 0) return fl.applyEdits({ addFeatures: adds });
+  if (adds.length > 0) {
+    const result = await fl.applyEdits({ addFeatures: adds });
+    checkEditResults(result.addFeatureResults, 'saveUnits');
+    return result;
+  }
 }
 
 // ── Save Incidents ────────────────────────────────────────────
@@ -154,7 +171,11 @@ export async function saveIncidents(url, incidents, operationId, operationName, 
       },
     });
   });
-  if (adds.length > 0) return fl.applyEdits({ addFeatures: adds });
+  if (adds.length > 0) {
+    const result = await fl.applyEdits({ addFeatures: adds });
+    checkEditResults(result.addFeatureResults, 'saveIncidents');
+    return result;
+  }
 }
 
 // ── Save Missions ─────────────────────────────────────────────
@@ -182,7 +203,11 @@ export async function saveMissions(url, missions, incidents, operationId, operat
       },
     });
   });
-  if (adds.length > 0) return fl.applyEdits({ addFeatures: adds });
+  if (adds.length > 0) {
+    const result = await fl.applyEdits({ addFeatures: adds });
+    checkEditResults(result.addFeatureResults, 'saveMissions');
+    return result;
+  }
 }
 
 // ── Save AO Polygon ───────────────────────────────────────────
@@ -204,7 +229,9 @@ export async function saveAO(url, aoCoords, aoLabel, operationId, operationName,
       ao_label:       aoLabel,
     },
   });
-  return fl.applyEdits({ addFeatures: [graphic] });
+  const result = await fl.applyEdits({ addFeatures: [graphic] });
+  checkEditResults(result.addFeatureResults, 'saveAO');
+  return result;
 }
 
 // ── Save Operations Table row ─────────────────────────────────
@@ -227,7 +254,9 @@ export async function saveOperationMeta(url, meta, overwrite = false) {
       updated_at:     now,
     },
   });
-  return fl.applyEdits({ addFeatures: [graphic] });
+  const result = await fl.applyEdits({ addFeatures: [graphic] });
+  checkEditResults(result.addFeatureResults, 'saveOperationMeta');
+  return result;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -254,7 +283,9 @@ export async function saveChatMessages(url, messages, operationId, overwrite = f
       sent_at:      m.sentAt || Date.now(),
     },
   }));
-  return fl.applyEdits({ addFeatures: adds });
+  const result = await fl.applyEdits({ addFeatures: adds });
+  checkEditResults(result.addFeatureResults, 'saveChatMessages');
+  return result;
 }
 
 /**
@@ -327,7 +358,9 @@ export async function saveAlerts(url, alerts, operationId, overwrite = false) {
       created_at:   a.created_at || Date.now(),
     },
   }));
-  return fl.applyEdits({ addFeatures: adds });
+  const result = await fl.applyEdits({ addFeatures: adds });
+  checkEditResults(result.addFeatureResults, 'saveAlerts');
+  return result;
 }
 
 /**

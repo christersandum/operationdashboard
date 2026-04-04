@@ -6,6 +6,10 @@ import {
   CalcitePanel,
 } from '@esri/calcite-components-react';
 import { wgs84ToUTM33N, utm33NToWGS84 } from '../utils/coordUtils';
+import UnitForm from './forms/UnitForm';
+import IncidentForm from './forms/IncidentForm';
+import MissionForm from './forms/MissionForm';
+import './RightPanel.css';
 
 // ── Helper: format a WGS84 lat,lng as UTM33 strings for form inputs ──
 function latLngToUtmStrings(lat, lng) {
@@ -234,33 +238,14 @@ export default function RightPanel({
                   <button className="rp-add-btn" onClick={openAddUnit}>+ Legg til</button>
                 </div>
                 {showUnitForm && (
-                  <div className="rp-form">
-                    <div className="rp-form-title">{editUnitId ? 'Rediger enhet' : 'Ny enhet'}</div>
-                    <input className="rp-input" placeholder="ID (f.eks P5)" value={unitForm.id} onChange={e => setUnitForm(f => ({ ...f, id: e.target.value }))} disabled={!!editUnitId} />
-                    <input className="rp-input" placeholder="Navn" value={unitForm.name} onChange={e => setUnitForm(f => ({ ...f, name: e.target.value }))} />
-                    <input className="rp-input" placeholder="Rolle" value={unitForm.role} onChange={e => setUnitForm(f => ({ ...f, role: e.target.value }))} />
-                    <input className="rp-input" placeholder="Team (f.eks Patrulje, Delta)" value={unitForm.team} onChange={e => setUnitForm(f => ({ ...f, team: e.target.value }))} />
-                    <select className="rp-input" value={unitForm.status} onChange={e => setUnitForm(f => ({ ...f, status: e.target.value }))}>
-                      <option value="online">Online / Ledig</option>
-                      <option value="opptatt">Opptatt</option>
-                      <option value="warning">Advarsel</option>
-                      <option value="offline">Offline</option>
-                    </select>
-                    <div className="rp-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Koordinater (UTM33/ETRS89) <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>— valgfri, klikk kart</span></span>
-                      {onRequestPickLocation && (
-                        <button className="rp-pick-btn" onClick={() => onRequestPickLocation('unit')}>
-                          📍 Velg fra kart
-                        </button>
-                      )}
-                    </div>
-                    <input className="rp-input" placeholder="Øst (f.eks 597000)" value={unitForm.utmE} onChange={e => setUnitForm(f => ({ ...f, utmE: e.target.value }))} />
-                    <input className="rp-input" placeholder="Nord (f.eks 6644000)" value={unitForm.utmN} onChange={e => setUnitForm(f => ({ ...f, utmN: e.target.value }))} />
-                    <div className="rp-form-actions">
-                      <button className="rp-btn" onClick={() => setShowUnitForm(false)}>Avbryt</button>
-                      <button className="rp-btn primary" onClick={saveUnit}>Lagre</button>
-                    </div>
-                  </div>
+                  <UnitForm
+                    form={unitForm}
+                    editId={editUnitId}
+                    onChange={(key, value) => setUnitForm(f => ({ ...f, [key]: value }))}
+                    onRequestPick={onRequestPickLocation}
+                    onSave={saveUnit}
+                    onCancel={() => setShowUnitForm(false)}
+                  />
                 )}
                 <div className="rp-list">
                   {units.map(u => (
@@ -287,33 +272,14 @@ export default function RightPanel({
                   <button className="rp-add-btn" onClick={openAddIncident}>+ Legg til</button>
                 </div>
                 {showIncidentForm && (
-                  <div className="rp-form">
-                    <div className="rp-form-title">{editIncidentId ? 'Rediger hendelse' : 'Ny hendelse'}</div>
-                    <input className="rp-input" placeholder="ID (f.eks HEN-007)" value={incidentForm.id} onChange={e => setIncidentForm(f => ({ ...f, id: e.target.value }))} disabled={!!editIncidentId} />
-                    <input className="rp-input" placeholder="Tittel" value={incidentForm.title} onChange={e => setIncidentForm(f => ({ ...f, title: e.target.value }))} />
-                    <textarea className="rp-input" placeholder="Beskrivelse" value={incidentForm.desc} onChange={e => setIncidentForm(f => ({ ...f, desc: e.target.value }))} rows={2} style={{ resize: 'vertical' }} />
-                    <select className="rp-input" value={incidentForm.priority} onChange={e => setIncidentForm(f => ({ ...f, priority: e.target.value }))}>
-                      <option value="alarm">Alarm</option>
-                      <option value="high">Høy</option>
-                      <option value="medium">Medium</option>
-                      <option value="low">Lav</option>
-                    </select>
-                    <input className="rp-input" placeholder="Ikon (emoji, f.eks 🚨)" value={incidentForm.icon} onChange={e => setIncidentForm(f => ({ ...f, icon: e.target.value }))} />
-                    <div className="rp-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Koordinater (UTM33/ETRS89) <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>— valgfri, klikk kart</span></span>
-                      {onRequestPickLocation && (
-                        <button className="rp-pick-btn" onClick={() => onRequestPickLocation('incident')}>
-                          📍 Velg fra kart
-                        </button>
-                      )}
-                    </div>
-                    <input className="rp-input" placeholder="Øst (f.eks 597000)" value={incidentForm.utmE} onChange={e => setIncidentForm(f => ({ ...f, utmE: e.target.value }))} />
-                    <input className="rp-input" placeholder="Nord (f.eks 6644000)" value={incidentForm.utmN} onChange={e => setIncidentForm(f => ({ ...f, utmN: e.target.value }))} />
-                    <div className="rp-form-actions">
-                      <button className="rp-btn" onClick={() => setShowIncidentForm(false)}>Avbryt</button>
-                      <button className="rp-btn primary" onClick={saveIncident}>Lagre</button>
-                    </div>
-                  </div>
+                  <IncidentForm
+                    form={incidentForm}
+                    editId={editIncidentId}
+                    onChange={(key, value) => setIncidentForm(f => ({ ...f, [key]: value }))}
+                    onRequestPick={onRequestPickLocation}
+                    onSave={saveIncident}
+                    onCancel={() => setShowIncidentForm(false)}
+                  />
                 )}
                 <div className="rp-list">
                   {incidents.map(inc => (
@@ -343,33 +309,16 @@ export default function RightPanel({
                   </div>
                 </div>
                 {showMissionForm && (
-                  <div className="rp-form">
-                    <div className="rp-form-title">{editMissionId ? 'Rediger oppdrag' : 'Nytt oppdrag'}</div>
-                    <input className="rp-input" placeholder="ID (f.eks OPP-014)" value={missionForm.id} onChange={e => setMissionForm(f => ({ ...f, id: e.target.value }))} disabled={!!editMissionId} />
-                    <input className="rp-input" placeholder="Tittel" value={missionForm.title} onChange={e => setMissionForm(f => ({ ...f, title: e.target.value }))} />
-                    <textarea className="rp-input" placeholder="Beskrivelse" value={missionForm.desc} onChange={e => setMissionForm(f => ({ ...f, desc: e.target.value }))} rows={2} style={{ resize: 'vertical' }} />
-                    <select className="rp-input" value={missionForm.incidentId} onChange={e => setMissionForm(f => ({ ...f, incidentId: e.target.value }))}>
-                      <option value="">-- Velg hendelse --</option>
-                      {incidents.map(i => <option key={i.id} value={i.id}>{i.id}: {i.title}</option>)}
-                    </select>
-                    <div className="rp-form-label">Tildel enheter:</div>
-                    <div className="rp-unit-checkboxes">
-                      {units.filter(u => u.status !== 'offline').map(u => (
-                        <label key={u.id} className="rp-unit-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={(missionForm.assignedUnitIds || []).includes(u.id)}
-                            onChange={() => toggleAssignUnit(u.id)}
-                          />
-                          {u.id} — {u.name}
-                        </label>
-                      ))}
-                    </div>
-                    <div className="rp-form-actions">
-                      <button className="rp-btn" onClick={() => setShowMissionForm(false)}>Avbryt</button>
-                      <button className="rp-btn primary" onClick={saveMission}>Lagre</button>
-                    </div>
-                  </div>
+                  <MissionForm
+                    form={missionForm}
+                    editId={editMissionId}
+                    incidents={incidents}
+                    units={units}
+                    onChange={(key, value) => setMissionForm(f => ({ ...f, [key]: value }))}
+                    onToggleUnit={toggleAssignUnit}
+                    onSave={saveMission}
+                    onCancel={() => setShowMissionForm(false)}
+                  />
                 )}
                 <div className="rp-list">
                   {missions.map(m => {

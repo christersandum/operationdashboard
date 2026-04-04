@@ -24,6 +24,7 @@ import {
   PORTAL_URL,
 } from '../data';
 import { wgs84ToUTM33N } from '../utils/coordUtils';
+import './ArcGISMap.css';
 
 // Offline fallback basemap URLs (Norwegian VectorTile — no auth required)
 const DARK_BASEMAP_URL  = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CalciteNavigation,
   CalciteNavigationLogo,
@@ -11,7 +11,9 @@ import {
   CalciteDropdownItem,
   CalciteLabel,
   CalciteInput,
+  CalciteDialog,
 } from '@esri/calcite-components-react';
+import './Header.css';
 
 const TIMEZONES = [
   { id: 'UTC',                 label: 'UTC',        abbr: 'UTC'      },
@@ -23,6 +25,7 @@ const TIMEZONES = [
 
 export default function Header({
   currentOpId,
+  currentOpName,
   onOperationChange,
   onBroadcast,
   scenarioEnded,
@@ -45,7 +48,6 @@ export default function Header({
   const [date, setDate]     = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef  = useRef(null);
 
   const defaultSettings = {
     warningInterval: 30, incidentInterval: 30, unitTravelTime: 35, taskInterval: 20, chatInterval: 15,
@@ -79,14 +81,6 @@ export default function Header({
     return () => clearInterval(id);
   }, [timezone]);
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   const applySettings = () => {
     if (onSettingsChange) onSettingsChange(settings);
     setSettingsOpen(false);
@@ -110,7 +104,7 @@ export default function Header({
         }}>
           <CalciteIcon icon="star" scale="s" />
           <span style={{ color: 'var(--calcite-color-text-1)', fontSize: '13px' }}>
-            Operasjon Norwegian Sword
+            {currentOpName || currentOpId || 'Operasjon'}
           </span>
         </div>
 
@@ -191,59 +185,60 @@ export default function Header({
         </CalciteDropdown>
 
         {/* Settings */}
-        <div ref={settingsRef} style={{ position: 'relative' }}>
-          <CalciteButton
-            kind="neutral"
-            appearance="transparent"
-            scale="s"
-            iconStart="gear"
-            onClick={() => setSettingsOpen(v => !v)}
-          >
-            Innstillinger
-          </CalciteButton>
-          {settingsOpen && (
-            <div style={{
-              position: 'absolute', top: '100%', right: 0, zIndex: 999,
-              background: 'var(--calcite-color-foreground-1)',
-              border: '1px solid var(--calcite-color-border-1)',
-              borderRadius: '4px', padding: '16px', minWidth: '280px',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            }}>
-              <div style={{ fontWeight: 600, marginBottom: '12px', fontSize: '13px', color: 'var(--calcite-color-text-1)' }}>
-                ⚙ Innstillinger
-              </div>
-              {[
-                { key: 'warningInterval',  label: 'Tid mellom varsler (sek)'         },
-                { key: 'incidentInterval', label: 'Tid mellom hendelser (sek)'        },
-                { key: 'unitTravelTime',   label: 'Reisetid for enheter (sek)'        },
-                { key: 'taskInterval',     label: 'Tid mellom oppdrag (sek)'          },
-                { key: 'chatInterval',     label: 'Tid mellom chat-meldinger (sek)'   },
-              ].map(({ key, label }) => (
-                <div key={key} style={{ marginBottom: '8px' }}>
-                  <CalciteLabel scale="s">
-                    {label}
-                    <CalciteInput
-                      type="number"
-                      scale="s"
-                      value={String(settings[key] ?? defaultSettings[key])}
-                      min="1"
-                      onCalciteInputInput={e => setSettings(s => ({ ...s, [key]: Number(e.target.value) }))}
-                    />
-                  </CalciteLabel>
-                </div>
-              ))}
-              <CalciteButton
-                width="full"
-                onClick={applySettings}
-                scale="s"
-                kind="brand"
-                style={{ marginTop: '8px' }}
-              >
-                Bruk innstillinger
-              </CalciteButton>
+        <CalciteButton
+          kind="neutral"
+          appearance="transparent"
+          scale="s"
+          iconStart="gear"
+          onClick={() => setSettingsOpen(true)}
+        >
+          Innstillinger
+        </CalciteButton>
+        <CalciteDialog
+          open={settingsOpen || undefined}
+          heading="⚙ Innstillinger"
+          scale="s"
+          onCalciteDialogClose={() => setSettingsOpen(false)}
+        >
+          {[
+            { key: 'warningInterval',  label: 'Tid mellom varsler (sek)'         },
+            { key: 'incidentInterval', label: 'Tid mellom hendelser (sek)'        },
+            { key: 'unitTravelTime',   label: 'Reisetid for enheter (sek)'        },
+            { key: 'taskInterval',     label: 'Tid mellom oppdrag (sek)'          },
+            { key: 'chatInterval',     label: 'Tid mellom chat-meldinger (sek)'   },
+          ].map(({ key, label }) => (
+            <div key={key} style={{ marginBottom: '8px' }}>
+              <CalciteLabel scale="s">
+                {label}
+                <CalciteInput
+                  type="number"
+                  scale="s"
+                  value={String(settings[key] ?? defaultSettings[key])}
+                  min="1"
+                  onCalciteInputInput={e => setSettings(s => ({ ...s, [key]: Number(e.target.value) }))}
+                />
+              </CalciteLabel>
             </div>
-          )}
-        </div>
+          ))}
+          <CalciteButton
+            slot="footer-end"
+            width="full"
+            onClick={applySettings}
+            scale="s"
+            kind="brand"
+          >
+            Bruk innstillinger
+          </CalciteButton>
+          <CalciteButton
+            slot="footer-start"
+            kind="neutral"
+            appearance="outline"
+            scale="s"
+            onClick={() => setSettingsOpen(false)}
+          >
+            Avbryt
+          </CalciteButton>
+        </CalciteDialog>
       </div>
 
       {isSignedIn ? (

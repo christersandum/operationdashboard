@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 
-const RECIPIENT_ALL = RECIPIENT_ALL;
+const RECIPIENT_ALL = 'Alle';
 
 export default function ChatTab({ messages, onSend, units }) {
   const [inputText, setInputText]   = useState('');
