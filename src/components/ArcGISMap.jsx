@@ -64,6 +64,7 @@ export default function ArcGISMap({
   const mapRef      = useRef(null);
   const basemapRef  = useRef(basemap);
   const basemapGalleryRef = useRef(null);
+  const isSignedInRef = useRef(isSignedIn);
 
   const skolerLayerRef   = useRef(null);
   const unitLayerRef     = useRef(null);
@@ -131,24 +132,26 @@ export default function ArcGISMap({
       if (onZoomChange) onZoomChange(Math.round(view.zoom));
 
       let searchSources = [];
-      try {
-        const portalItem = new PortalItem({
-          id: SEARCH_LOCATOR_ITEM_ID,
-          portal: { url: SEARCH_PORTAL_URL },
-        });
-        await portalItem.load();
-        if (portalItem.url) {
-          searchSources = [{
-            url: portalItem.url,
-            singleLineFieldName: 'SingleLine',
-            name: 'Adressesøk (DSB)',
-            placeholder: 'Søk sted eller adresse…',
-            outFields: ['*'],
-          }];
+      if (isSignedInRef.current) {
+        try {
+          const portalItem = new PortalItem({
+            id: SEARCH_LOCATOR_ITEM_ID,
+            portal: { url: SEARCH_PORTAL_URL },
+          });
+          await portalItem.load();
+          if (portalItem.url) {
+            searchSources = [{
+              url: portalItem.url,
+              singleLineFieldName: 'SingleLine',
+              name: 'Adressesøk (DSB)',
+              placeholder: 'Søk sted eller adresse…',
+              outFields: ['*'],
+            }];
+          }
+        } catch (err) {
+          // Portal item unavailable (network error or insufficient permissions)
+          console.warn('[ArcGISMap] Could not load search locator from portal item:', err);
         }
-      } catch (err) {
-        // Portal item unavailable (network blocked or auth required) — Search widget falls back to its default sources
-        console.warn('[ArcGISMap] Could not load search locator from portal item:', err);
       }
 
       const searchWidget = new Search({
@@ -189,6 +192,11 @@ export default function ArcGISMap({
       viewRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync isSignedIn ref (prevents stale closure in async init) ─
+  useEffect(() => {
+    isSignedInRef.current = isSignedIn;
+  }, [isSignedIn]);
 
   // ── Sync drawAOMode ref ────────────────────────────────────
   useEffect(() => {
