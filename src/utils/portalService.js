@@ -352,7 +352,4 @@ export async function getOperationServiceUrls(folderId) {
 }
 
 // ── Legacy stub kept for import compatibility ────────────────
-export async function ensureOpsServices() {
-  console.warn('[portalService] ensureOpsServices() is deprecated. Use createOperationFolder().');
-  return { urls: {}, webmapId: null };
-}
+// REMOVED: ensureOpsServices() deprecated stub

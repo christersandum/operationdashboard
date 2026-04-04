@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import './App.css';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import ArcGISMap from './components/ArcGISMap';
 import RightPanel from './components/RightPanel';
 import OperationPicker from './components/OperationPicker';
 import WebMapPicker from './components/WebMapPicker';
 import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel, CalciteCheckbox } from '@esri/calcite-components-react';
-
+import { ARCGIS_ENABLED } from './data';
 import {
   UNITS_SWORD,
   INCIDENTS_SWORD_STAGED,
@@ -16,7 +15,7 @@ import {
   SEED_CONFIG,
   ALERTS_SWORD,
 } from './utils/seedData';
-import { formatUTM33 } from './utils/coordUtils';
+import { formatUTM33, wgs84ToUTM33N } from './utils/coordUtils';
 import { getPortalUser, createOperationFolder, listOperationFolders, getOperationServiceUrls } from './utils/portalService';
 import { seedNorwegianSword } from './utils/seedMigration';
 import IdentityManager from '@arcgis/core/identity/IdentityManager';
@@ -27,10 +26,12 @@ import {
   operationExistsInLayer,
   addFeature,
   listOperations,
+  clearLayerCache,
 } from './utils/featureServiceSync';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
-import { wgs84ToUTM33N } from './utils/coordUtils';
+
+const ArcGISMap = lazy(() => import('./components/ArcGISMap'));
 
 const UNIT_MOVE_SPEED  = 0.004;
 const UNIT_RANDOM_STEP = 0.003;
@@ -550,18 +551,20 @@ export default function App() {
     loadOperation();
     startAlertInterval(timingSettingsRef.current.warningInterval);
 
-    // Silently check if already signed in (e.g. from a previous session)
-    IdentityManager.checkSignInStatus('https://beredskap.maps.arcgis.com/sharing/rest')
-      .then(() => {
-        setIsSignedIn(true);
-        getPortalUser()
-          .then(user => setPortalUser(user))
-          .catch(err => console.warn('[App] Could not fetch portal user:', err));
-      })
-      .catch(() => {
-        // Not signed in — app works in offline mode with seed data
-        console.log('[App] Not signed in. Running in offline mode.');
-      });
+    // Silently check if already signed in (only when ArcGIS is enabled)
+    if (ARCGIS_ENABLED) {
+      IdentityManager.checkSignInStatus('https://beredskap.maps.arcgis.com/sharing/rest')
+        .then(() => {
+          setIsSignedIn(true);
+          getPortalUser()
+            .then(user => setPortalUser(user))
+            .catch(err => console.warn('[App] Could not fetch portal user:', err));
+        })
+        .catch(() => {
+          // Not signed in — app works in offline mode with seed data
+          console.log('[App] Not signed in. Running in offline mode.');
+        });
+    }
 
     return () => {
       simTimers.current.forEach(clearTimeout);
@@ -615,6 +618,7 @@ export default function App() {
   const handleLogout = useCallback(async () => {
     try {
       IdentityManager.destroyCredentials();
+      clearLayerCache();
       setIsSignedIn(false);
       setPortalUser(null);
       serviceUrlsRef.current = {};
@@ -1178,6 +1182,7 @@ export default function App() {
     <CalciteShell class="calcite-theme-dark" style={{ height: '100vh' }}>
       <Header
         currentOpId={currentOpId}
+        currentOpName={currentOpName}
         onOperationChange={handleOperationChange}
         onBroadcast={handleBroadcast}
         scenarioEnded={scenarioEnded}
@@ -1230,38 +1235,40 @@ export default function App() {
         />
         {/* Map area */}
         <div className="map-area">
-          <ArcGISMap
-            center={mapCenter}
-            zoom={mapZoom}
-            basemap={basemap}
-            webmapId={selectedWebmapId}
-            units={unitsVisible ? units : []}
-            incidents={incidentsVisible ? incidents : []}
-            missions={missionsVisible ? missions : []}
-            missionPositions={missionPositions}
-            aoCoords={currentAoCoords || opConfig.aoCoords}
-            aoLabel={opConfig.aoLabel}
-            aoVisible={aoVisible}
-            isSignedIn={isSignedIn}
-            onViewReady={(v) => { viewRef.current = v; }}
-            onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
-            onZoomChange={setCurrentZoom}
-            drawAOMode={drawAOMode}
-            onMapClick={handleMapClick}
-            skolerBarnehagerVisible={skolerBarnehagerVisible}
-            unitsVisible={unitsVisible}
-            incidentsVisible={incidentsVisible}
-            missionsVisible={missionsVisible}
-            aoVisible={aoVisible}
-            onUnitsVisibleChange={setUnitsVisible}
-            onIncidentsVisibleChange={setIncidentsVisible}
-            onMissionsVisibleChange={setMissionsVisible}
-            onAoVisibleChange={setAoVisible}
-            onSkolerVisibleChange={setSkolerBarnehagerVisible}
-            pickingLocation={pickingLocation}
-            isPlaying={isPlaying}
-            onPlayPause={handlePlayPause}
-          />
+          <Suspense fallback={<div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--calcite-color-text-2)', fontSize: '14px' }}>Laster kart…</div>}>
+            <ArcGISMap
+              center={mapCenter}
+              zoom={mapZoom}
+              basemap={basemap}
+              webmapId={selectedWebmapId}
+              units={unitsVisible ? units : []}
+              incidents={incidentsVisible ? incidents : []}
+              missions={missionsVisible ? missions : []}
+              missionPositions={missionPositions}
+              aoCoords={currentAoCoords || opConfig.aoCoords}
+              aoLabel={opConfig.aoLabel}
+              aoVisible={aoVisible}
+              isSignedIn={isSignedIn}
+              onViewReady={(v) => { viewRef.current = v; }}
+              onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
+              onZoomChange={setCurrentZoom}
+              drawAOMode={drawAOMode}
+              onMapClick={handleMapClick}
+              skolerBarnehagerVisible={skolerBarnehagerVisible}
+              unitsVisible={unitsVisible}
+              incidentsVisible={incidentsVisible}
+              missionsVisible={missionsVisible}
+              aoVisible={aoVisible}
+              onUnitsVisibleChange={setUnitsVisible}
+              onIncidentsVisibleChange={setIncidentsVisible}
+              onMissionsVisibleChange={setMissionsVisible}
+              onAoVisibleChange={setAoVisible}
+              onSkolerVisibleChange={setSkolerBarnehagerVisible}
+              pickingLocation={pickingLocation}
+              isPlaying={isPlaying}
+              onPlayPause={handlePlayPause}
+            />
+          </Suspense>
 
           {/* Toolbar */}
           <div className="map-toolbar">

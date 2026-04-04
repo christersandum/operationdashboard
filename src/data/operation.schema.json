@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Operation",
+  "type": "object",
+  "required": ["operationId", "operationName", "units", "incidents", "missions"],
+  "properties": {
+    "operationId":   { "type": "string" },
+    "operationName": { "type": "string" },
+    "center": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[longitude, latitude] map centre in WGS84"
+    },
+    "zoom":     { "type": "number" },
+    "aoCoords": {
+      "type": "array",
+      "description": "Area-of-Operations polygon ring as [[lng, lat], …] in WGS84"
+    },
+    "aoLabel":  { "type": "string" },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "status", "lat", "lng"],
+        "properties": {
+          "id":     { "type": "string" },
+          "name":   { "type": "string" },
+          "role":   { "type": "string" },
+          "team":   { "type": "string" },
+          "status": { "type": "string", "enum": ["online", "ledig", "opptatt", "warning", "offline"] },
+          "lat":    { "type": "number" },
+          "lng":    { "type": "number" },
+          "signal": { "type": "number" }
+        }
+      }
+    },
+    "incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "lat", "lng"],
+        "properties": {
+          "id":         { "type": "string" },
+          "title":      { "type": "string" },
+          "desc":       { "type": "string" },
+          "priority":   { "type": "string", "enum": ["alarm", "high", "medium", "low"] },
+          "icon":       { "type": "string" },
+          "time":       { "type": "string" },
+          "lat":        { "type": "number" },
+          "lng":        { "type": "number" },
+          "colorIndex": { "type": "number" }
+        }
+      }
+    },
+    "missions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "incidentId"],
+        "properties": {
+          "id":              { "type": "string" },
+          "title":           { "type": "string" },
+          "desc":            { "type": "string" },
+          "incidentId":      { "type": "string" },
+          "status":          { "type": "string", "enum": ["active", "completed", "pending"] },
+          "assignedUnitIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "chat": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id":       { "type": "number" },
+          "sender":   { "type": "string" },
+          "initials": { "type": "string" },
+          "color":    { "type": "string" },
+          "text":     { "type": "string" },
+          "time":     { "type": "string" },
+          "system":   { "type": "boolean" },
+          "self":     { "type": "boolean" }
+        }
+      }
+    },
+    "commander": { "type": "string" }
+  }
+}

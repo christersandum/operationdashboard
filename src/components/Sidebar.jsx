@@ -12,6 +12,7 @@ import IncidentsTab   from './tabs/IncidentsTab';
 import MissionsTab    from './tabs/MissionsTab';
 import ChatTab        from './tabs/ChatTab';
 import SymbolLibraryTab from './tabs/SymbolLibraryTab';
+import './Sidebar.css';
 
 const TAB_DEFS = [
   { id: 'overview',      label: 'Oversikt',  icon: 'grid'                      },
@@ -69,24 +70,36 @@ export default function Sidebar({
       </CalciteActionBar>
 
       <CalcitePanel heading={PANEL_HEADINGS[activeTab]} style={{ height: '100%' }}>
-        <div style={{ display: activeTab === 'overview'     ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <OverviewTab opConfig={opConfig} stats={stats} missionStartTime={missionStartTime} units={units} />
-        </div>
-        <div style={{ display: activeTab === 'participants' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <UnitsTab units={units} incidents={incidents} onUnitClick={onUnitClick} />
-        </div>
-        <div style={{ display: activeTab === 'incidents'   ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <IncidentsTab incidents={incidents} units={units} onIncidentClick={onIncidentClick} />
-        </div>
-        <div style={{ display: activeTab === 'missions'    ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <MissionsTab missions={missions || []} units={units} incidents={incidents} onMissionClick={onMissionClick} />
-        </div>
-        <div style={{ display: activeTab === 'chat'        ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <ChatTab messages={chatHistory} onSend={onSendMessage} units={units} />
-        </div>
-        <div style={{ display: activeTab === 'symbols'     ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-          <SymbolLibraryTab />
-        </div>
+        {activeTab === 'overview' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <OverviewTab opConfig={opConfig} stats={stats} missionStartTime={missionStartTime} units={units} />
+          </div>
+        )}
+        {activeTab === 'participants' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <UnitsTab units={units} incidents={incidents} onUnitClick={onUnitClick} />
+          </div>
+        )}
+        {activeTab === 'incidents' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <IncidentsTab incidents={incidents} units={units} onIncidentClick={onIncidentClick} />
+          </div>
+        )}
+        {activeTab === 'missions' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <MissionsTab missions={missions || []} units={units} incidents={incidents} onMissionClick={onMissionClick} />
+          </div>
+        )}
+        {activeTab === 'chat' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <ChatTab messages={chatHistory} onSend={onSendMessage} units={units} />
+          </div>
+        )}
+        {activeTab === 'symbols' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <SymbolLibraryTab />
+          </div>
+        )}
       </CalcitePanel>
     </CalciteShellPanel>
   );

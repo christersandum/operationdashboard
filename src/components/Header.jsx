@@ -12,6 +12,7 @@ import {
   CalciteLabel,
   CalciteInput,
 } from '@esri/calcite-components-react';
+import './Header.css';
 
 const TIMEZONES = [
   { id: 'UTC',                 label: 'UTC',        abbr: 'UTC'      },
@@ -23,6 +24,7 @@ const TIMEZONES = [
 
 export default function Header({
   currentOpId,
+  currentOpName,
   onOperationChange,
   onBroadcast,
   scenarioEnded,
@@ -110,7 +112,7 @@ export default function Header({
         }}>
           <CalciteIcon icon="star" scale="s" />
           <span style={{ color: 'var(--calcite-color-text-1)', fontSize: '13px' }}>
-            Operasjon Norwegian Sword
+            {currentOpName || currentOpId || 'Operasjon'}
           </span>
         </div>
 
