@@ -1270,7 +1270,6 @@ export default function App() {
               missionPositions={missionPositions}
               aoCoords={currentAoCoords || opConfig.aoCoords}
               aoLabel={opConfig.aoLabel}
-              aoVisible={aoVisible}
               isSignedIn={isSignedIn}
               onViewReady={(v) => { viewRef.current = v; }}
               onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
