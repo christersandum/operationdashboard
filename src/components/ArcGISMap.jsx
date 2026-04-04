@@ -26,13 +26,16 @@ import {
 import { wgs84ToUTM33N } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Offline fallback basemap URLs (Norwegian VectorTile — no auth required)
-const DARK_BASEMAP_URL  = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer';
-const LIGHT_BASEMAP_URL = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer';
+// Geodata Norway VectorTile basemap URLs (licensed)
+const BASEMAP_URLS = {
+  dark:   'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork/VectorTileServer',
+  light:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone/VectorTileServer',
+  kanvas: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvas/VectorTileServer',
+};
 
-// ── Helper: build a Basemap instance for offline fallback ────
-function buildOfflineBasemap(basemapId) {
-  const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
+// ── Helper: build a Basemap instance ────────────────────────
+function buildBasemap(basemapId) {
+  const url = BASEMAP_URLS[basemapId] ?? BASEMAP_URLS.dark;
   return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
 }
 
@@ -139,7 +142,7 @@ export default function ArcGISMap({
       map.add(unitLayer);
     } else {
       map = new Map({
-        basemap: buildOfflineBasemap(basemap),
+        basemap: buildBasemap(basemap),
         layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
       });
     }
@@ -245,13 +248,13 @@ export default function ArcGISMap({
     }
   }, [pickingLocation]);
 
-  // ── Basemap switch (offline fallback only — portal BasemapGallery handles online) ─
+  // ── Basemap switch (CartoDB tiles — portal BasemapGallery handles online) ─
   useEffect(() => {
     if (!mapRef.current) return;
     if (basemap === basemapRef.current) return;
-    // Only switch using offline basemaps when not signed in
+    // Only switch using CartoDB basemap when not signed in
     if (!basemapGalleryRef.current) {
-      mapRef.current.basemap = buildOfflineBasemap(basemap);
+      mapRef.current.basemap = buildBasemap(basemap);
     }
     basemapRef.current = basemap;
   }, [basemap]);
@@ -272,8 +275,8 @@ export default function ArcGISMap({
       viewRef.current.ui.remove(basemapGalleryRef.current);
       basemapGalleryRef.current.destroy();
       basemapGalleryRef.current = null;
-      // Restore offline basemap
-      if (mapRef.current) mapRef.current.basemap = buildOfflineBasemap(basemapRef.current);
+      // Restore CartoDB basemap
+      if (mapRef.current) mapRef.current.basemap = buildBasemap(basemapRef.current);
     }
   }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
