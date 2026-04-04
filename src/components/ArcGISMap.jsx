@@ -3,7 +3,7 @@ import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
-import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
+import WebTileLayer from '@arcgis/core/layers/WebTileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
@@ -14,6 +14,7 @@ import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import CIMSymbol from '@arcgis/core/symbols/CIMSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
+import SearchSource from '@arcgis/core/widgets/Search/SearchSource';
 import BasemapGallery from '@arcgis/core/widgets/BasemapGallery';
 import Portal from '@arcgis/core/portal/Portal';
 import PortalItem from '@arcgis/core/portal/PortalItem';
@@ -26,17 +27,23 @@ import {
 import { wgs84ToUTM33N } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Geodata Norway VectorTile basemap URLs (licensed)
+// CartoDB free raster basemaps (no API key required)
 const BASEMAP_URLS = {
-  dark:   'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork/VectorTileServer',
-  light:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone/VectorTileServer',
-  kanvas: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvas/VectorTileServer',
+  dark:   'https://{subDomain}.basemaps.cartocdn.com/dark_all/{level}/{col}/{row}.png',
+  light:  'https://{subDomain}.basemaps.cartocdn.com/light_all/{level}/{col}/{row}.png',
+  kanvas: 'https://{subDomain}.basemaps.cartocdn.com/rastertiles/voyager/{level}/{col}/{row}.png',
 };
 
 // ── Helper: build a Basemap instance ────────────────────────
 function buildBasemap(basemapId) {
   const url = BASEMAP_URLS[basemapId] ?? BASEMAP_URLS.dark;
-  return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
+  return new Basemap({
+    baseLayers: [new WebTileLayer({
+      urlTemplate: url,
+      subDomains: ['a', 'b', 'c', 'd'],
+      copyright: '© OpenStreetMap contributors, © CARTO',
+    })],
+  });
 }
 
 export default function ArcGISMap({
@@ -187,11 +194,63 @@ export default function ArcGISMap({
         }
       }
 
+      // Always include Kartverket free geocoding as a fallback for Norwegian addresses
+      const kartverkSource = new SearchSource({
+        name: 'Adressesøk (Kartverket)',
+        placeholder: 'Søk adresse i Norge…',
+        maxSuggestions: 6,
+        getSuggestions: async (params) => {
+          const text = params.suggestTerm;
+          if (!text || text.length < 2) return [];
+          try {
+            const url = `https://ws.geonorge.no/adresser/v1/sok?sok=${encodeURIComponent(text)}&fuzzy=true&treffPerSide=6`;
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const data = await res.json();
+            if (!Array.isArray(data.adresser)) return [];
+            return data.adresser.map((a, i) => ({
+              key: `kv-${i}`,
+              text: `${a.adressetekst ?? ''}, ${a.postnummer ?? ''} ${a.poststed ?? ''}`,
+              sourceIndex: params.sourceIndex,
+            }));
+          } catch {
+            return [];
+          }
+        },
+        getResults: async (params) => {
+          const text = params.suggestResult?.text || '';
+          if (!text) return [];
+          try {
+            const url = `https://ws.geonorge.no/adresser/v1/sok?sok=${encodeURIComponent(text)}&treffPerSide=1`;
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const data = await res.json();
+            const a = data.adresser?.[0];
+            if (!a || !a.representasjonspunkt?.lon || !a.representasjonspunkt?.lat) return [];
+            const name = `${a.adressetekst ?? ''}, ${a.postnummer ?? ''} ${a.poststed ?? ''}`;
+            const feature = new Graphic({
+              geometry: new Point({
+                longitude: a.representasjonspunkt.lon,
+                latitude: a.representasjonspunkt.lat,
+                spatialReference: { wkid: 4326 },
+              }),
+              attributes: { name },
+            });
+            return [{ extent: null, feature, target: feature, name }];
+          } catch {
+            return [];
+          }
+        },
+      });
+      searchSources.push(kartverkSource);
+
+      // Disable default ArcGIS sources — they require an API key or portal auth.
+      // Kartverket source above provides free Norwegian address search without auth.
       const searchWidget = new Search({
         view,
-        includeDefaultSources: searchSources.length === 0,
+        includeDefaultSources: false,
         sources: searchSources,
-        searchAllEnabled: false,
+        searchAllEnabled: searchSources.length > 1,
       });
       view.ui.add(searchWidget, 'top-right');
 
