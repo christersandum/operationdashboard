@@ -3,7 +3,7 @@ import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
-import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
+import WebTileLayer from '@arcgis/core/layers/WebTileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
@@ -26,14 +26,17 @@ import {
 import { wgs84ToUTM33N } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Offline fallback basemap URLs (Norwegian VectorTile — no auth required)
-const DARK_BASEMAP_URL  = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer';
-const LIGHT_BASEMAP_URL = 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer';
+// Basemap tile URLs — CartoDB (free, no auth required, proper CORS)
+const DARK_BASEMAP_TEMPLATE  = 'https://{subDomain}.basemaps.cartocdn.com/dark_all/{level}/{col}/{row}.png';
+const LIGHT_BASEMAP_TEMPLATE = 'https://{subDomain}.basemaps.cartocdn.com/light_all/{level}/{col}/{row}.png';
+const BASEMAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>';
 
-// ── Helper: build a Basemap instance for offline fallback ────
+// ── Helper: build a Basemap instance ────────────────────────
 function buildOfflineBasemap(basemapId) {
-  const url = basemapId === 'light' ? LIGHT_BASEMAP_URL : DARK_BASEMAP_URL;
-  return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
+  const urlTemplate = basemapId === 'light' ? LIGHT_BASEMAP_TEMPLATE : DARK_BASEMAP_TEMPLATE;
+  return new Basemap({
+    baseLayers: [new WebTileLayer({ urlTemplate, subDomains: ['a', 'b', 'c', 'd'], copyright: BASEMAP_ATTRIBUTION })],
+  });
 }
 
 export default function ArcGISMap({
