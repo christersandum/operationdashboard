@@ -30,8 +30,12 @@ import {
 } from './utils/featureServiceSync';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
+import { createLocalProvider } from './services/localProvider';
 
 const ArcGISMap = lazy(() => import('./components/ArcGISMap'));
+
+// Singleton local provider for offline/local persistence
+const localProvider = createLocalProvider();
 
 const UNIT_MOVE_SPEED  = 0.004;
 const UNIT_RANDOM_STEP = 0.003;
@@ -169,6 +173,25 @@ export default function App() {
 
   // Norwegian Sword seed config used as fallback when not signed in
   const opConfig = SEED_CONFIG;
+
+  // ── Auto-save operation state to localStorage (debounced 2s) ──
+  // Intentionally only triggers on data changes (units/incidents/missions/chat/ao).
+  // Config props (currentOpName, mapCenter, etc.) are read at save time from state.
+  useEffect(() => {
+    if (!currentOpId) return;
+    localProvider.autoSave(currentOpId, {
+      operationId:   currentOpId,
+      operationName: currentOpName,
+      center:        mapCenter,
+      zoom:          mapZoom,
+      aoCoords:      currentAoCoords,
+      aoLabel:       opConfig.aoLabel,
+      units,
+      incidents,
+      missions,
+      chat:          chatHistory,
+    });
+  }, [units, incidents, missions, chatHistory, currentAoCoords, currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Panel resize handlers ──────────────────────────────────
   const handleSidebarResizeStart = useCallback((e) => {
