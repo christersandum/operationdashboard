@@ -3,7 +3,7 @@ import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
-import WebTileLayer from '@arcgis/core/layers/WebTileLayer';
+import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
@@ -26,17 +26,17 @@ import {
 import { wgs84ToUTM33N } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Basemap tile URLs — CartoDB (free, no auth required, proper CORS)
-const DARK_BASEMAP_TEMPLATE  = 'https://{subDomain}.basemaps.cartocdn.com/dark_all/{level}/{col}/{row}.png';
-const LIGHT_BASEMAP_TEMPLATE = 'https://{subDomain}.basemaps.cartocdn.com/light_all/{level}/{col}/{row}.png';
-const BASEMAP_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>';
+// Geodata Norway VectorTile basemap URLs (licensed)
+const BASEMAP_URLS = {
+  dark:   'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork/VectorTileServer',
+  light:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone/VectorTileServer',
+  kanvas: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvas/VectorTileServer',
+};
 
 // ── Helper: build a Basemap instance ────────────────────────
 function buildBasemap(basemapId) {
-  const urlTemplate = basemapId === 'light' ? LIGHT_BASEMAP_TEMPLATE : DARK_BASEMAP_TEMPLATE;
-  return new Basemap({
-    baseLayers: [new WebTileLayer({ urlTemplate, subDomains: ['a', 'b', 'c', 'd'], copyright: BASEMAP_ATTRIBUTION })],
-  });
+  const url = BASEMAP_URLS[basemapId] ?? BASEMAP_URLS.dark;
+  return new Basemap({ baseLayers: [new VectorTileLayer({ url })] });
 }
 
 export default function ArcGISMap({
