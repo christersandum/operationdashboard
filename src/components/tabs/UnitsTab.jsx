@@ -3,7 +3,7 @@ import { INCIDENT_COLORS } from '../../data';
 
 const TEAM_UNKNOWN = 'Ukjent';
 
-export default function UnitsTab({ units, incidents, onUnitClick }) {
+export default function UnitsTab({ units, incidents, onUnitClick, onAddUnit }) {
   const [query,  setQuery]  = useState('');
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
@@ -69,7 +69,7 @@ export default function UnitsTab({ units, incidents, onUnitClick }) {
           <span className="section-count">{units.length} enheter</span>
         </span>
         <div className="section-actions">
-          <button className="icon-btn" title="Legg til enhet">
+          <button className="icon-btn" title="Legg til enhet" onClick={onAddUnit}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>

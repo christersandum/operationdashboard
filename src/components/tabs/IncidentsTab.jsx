@@ -46,13 +46,13 @@ export default function IncidentsTab({ incidents, units, onIncidentClick }) {
       </div>
 
       <div className="filter-pills">
-        {['all', 'high', 'medium', 'low'].map(f => (
+        {['all', 'alarm', 'high', 'medium', 'low'].map(f => (
           <span
             key={f}
             className={`filter-pill${filter === f ? ' active' : ''}`}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? 'Alle' : f === 'high' ? 'Høy' : f === 'medium' ? 'Medium' : 'Lav'}
+            {f === 'all' ? 'Alle' : f === 'alarm' ? 'Alarm' : f === 'high' ? 'Høy' : f === 'medium' ? 'Medium' : 'Lav'}
           </span>
         ))}
       </div>
@@ -65,9 +65,11 @@ export default function IncidentsTab({ incidents, units, onIncidentClick }) {
         )}
         {filtered.map(inc => {
           const assignedUnits = units.filter(u => u.assignedIncident === inc.id);
-          const priorityColor = inc.priority === 'high' ? 'var(--accent-red)'
+          const priorityColor = inc.priority === 'alarm'  ? '#ff4444'
+            : inc.priority === 'high'   ? 'var(--accent-red)'
             : inc.priority === 'medium' ? 'var(--accent-orange)' : 'var(--accent-green)';
-          const priorityLabel = inc.priority === 'high' ? 'høy'
+          const priorityLabel = inc.priority === 'alarm'  ? 'alarm'
+            : inc.priority === 'high'   ? 'høy'
             : inc.priority === 'medium' ? 'medium' : 'lav';
 
           return (
