@@ -34,8 +34,8 @@ const PANEL_HEADINGS = {
 
 export default function Sidebar({
   opConfig, units, incidents, missions, chatHistory, stats, missionStartTime,
-  onUnitClick, onIncidentClick, onSendMessage, unreadChat, unreadIncidents,
-  onTabChange, onMissionClick, width,
+  onUnitClick, onIncidentClick, onSendMessage, onClearChat, onOpenRightPanel,
+  unreadChat, unreadIncidents, onTabChange, onMissionClick, width,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -77,7 +77,7 @@ export default function Sidebar({
         )}
         {activeTab === 'participants' && (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <UnitsTab units={units} incidents={incidents} onUnitClick={onUnitClick} />
+            <UnitsTab units={units} incidents={incidents} onUnitClick={onUnitClick} onAddUnit={onOpenRightPanel} />
           </div>
         )}
         {activeTab === 'incidents' && (
@@ -92,7 +92,7 @@ export default function Sidebar({
         )}
         {activeTab === 'chat' && (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <ChatTab messages={chatHistory} onSend={onSendMessage} units={units} />
+            <ChatTab messages={chatHistory} onSend={onSendMessage} onClearChat={onClearChat} units={units} />
           </div>
         )}
         {activeTab === 'symbols' && (

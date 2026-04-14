@@ -12,7 +12,7 @@ import CoordinatePicker from './CoordinatePicker';
  *   onSave            {fn}
  *   onCancel          {fn}
  */
-export default function UnitForm({ form, editId, onChange, onRequestPick, onSave, onCancel }) {
+export default function UnitForm({ form, editId, onChange, onRequestPick, onSave, onCancel, error }) {
   return (
     <div className="rp-form">
       <div className="rp-form-title">{editId ? 'Rediger enhet' : 'Ny enhet'}</div>
@@ -24,7 +24,7 @@ export default function UnitForm({ form, editId, onChange, onRequestPick, onSave
         disabled={!!editId}
       />
       <input
-        className="rp-input"
+        className={`rp-input${error ? ' rp-input-error' : ''}`}
         placeholder="Navn"
         value={form.name}
         onChange={e => onChange('name', e.target.value)}
@@ -58,6 +58,7 @@ export default function UnitForm({ form, editId, onChange, onRequestPick, onSave
         onChangeN={v => onChange('utmN', v)}
         onRequestPick={onRequestPick ? () => onRequestPick('unit') : null}
       />
+      {error && <div className="rp-form-error">{error}</div>}
       <div className="rp-form-actions">
         <button className="rp-btn" onClick={onCancel}>Avbryt</button>
         <button className="rp-btn primary" onClick={onSave}>Lagre</button>

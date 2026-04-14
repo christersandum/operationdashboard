@@ -714,6 +714,16 @@ export default function App() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleClearChat = useCallback(() => {
+    chatIdRef.current = 2;
+    setChatHistory([{
+      id: 1, sender: 'System', initials: '⚙', color: '#6b7280',
+      system: true, self: false, time: nowTime(),
+      text: '🗑 Chat tømt av operatør.',
+    }]);
+    setUnreadChat(0);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleBroadcast = useCallback(() => setBroadcastOpen(true), []);
 
   const sendBroadcast = () => {
@@ -797,6 +807,7 @@ export default function App() {
     const newUnit = { ...unitData, target: null, assignedIncident: null, incidentColorIndex: null, signal: 4 };
     unitsRef.current = [...unitsRef.current, newUnit];
     setUnits([...unitsRef.current]);
+    setStats(prev => ({ ...prev, units: unitsRef.current.length }));
     // Sync to ArcGIS Online if signed in
     const urls = serviceUrlsRef.current;
     if (urls?.units) {
@@ -817,6 +828,7 @@ export default function App() {
   const handleDeleteUnit = useCallback((unitId) => {
     unitsRef.current = unitsRef.current.filter(u => u.id !== unitId);
     setUnits([...unitsRef.current]);
+    setStats(prev => ({ ...prev, units: unitsRef.current.length }));
   }, []);
 
   const handleAddIncident = useCallback((incData) => {
@@ -1245,6 +1257,8 @@ export default function App() {
           onIncidentClick={handleIncidentClick}
           onMissionClick={handleMissionClick}
           onSendMessage={handleSendMessage}
+          onClearChat={handleClearChat}
+          onOpenRightPanel={() => setRightPanelOpen(true)}
           unreadChat={unreadChat}
           unreadIncidents={unreadIncidents}
           onTabChange={handleTabChange}

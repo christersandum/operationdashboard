@@ -12,7 +12,7 @@ import CoordinatePicker from './CoordinatePicker';
  *   onSave            {fn}
  *   onCancel          {fn}
  */
-export default function IncidentForm({ form, editId, onChange, onRequestPick, onSave, onCancel }) {
+export default function IncidentForm({ form, editId, onChange, onRequestPick, onSave, onCancel, error }) {
   return (
     <div className="rp-form">
       <div className="rp-form-title">{editId ? 'Rediger hendelse' : 'Ny hendelse'}</div>
@@ -24,7 +24,7 @@ export default function IncidentForm({ form, editId, onChange, onRequestPick, on
         disabled={!!editId}
       />
       <input
-        className="rp-input"
+        className={`rp-input${error ? ' rp-input-error' : ''}`}
         placeholder="Tittel"
         value={form.title}
         onChange={e => onChange('title', e.target.value)}
@@ -60,6 +60,7 @@ export default function IncidentForm({ form, editId, onChange, onRequestPick, on
         onChangeN={v => onChange('utmN', v)}
         onRequestPick={onRequestPick ? () => onRequestPick('incident') : null}
       />
+      {error && <div className="rp-form-error">{error}</div>}
       <div className="rp-form-actions">
         <button className="rp-btn" onClick={onCancel}>Avbryt</button>
         <button className="rp-btn primary" onClick={onSave}>Lagre</button>

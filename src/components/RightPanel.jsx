@@ -55,11 +55,13 @@ export default function RightPanel({
   const [unitForm, setUnitForm] = useState({ id: '', name: '', role: '', team: '', status: 'online', utmE: '', utmN: '' });
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [editUnitId, setEditUnitId] = useState(null);
+  const [unitFormError, setUnitFormError] = useState('');
 
   // Incident form
   const [incidentForm, setIncidentForm] = useState({ id: '', title: '', desc: '', priority: 'medium', utmE: '', utmN: '', icon: '🚨' });
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [editIncidentId, setEditIncidentId] = useState(null);
+  const [incidentFormError, setIncidentFormError] = useState('');
 
   // Mission form (missions have no direct coordinates)
   const [missionForm, setMissionForm] = useState({ id: '', title: '', desc: '', incidentId: '', assignedUnitIds: [] });
@@ -83,15 +85,22 @@ export default function RightPanel({
   const openAddUnit = () => {
     setUnitForm({ id: '', name: '', role: '', team: '', status: 'online', utmE: '', utmN: '' });
     setEditUnitId(null);
+    setUnitFormError('');
     setShowUnitForm(true);
   };
   const openEditUnit = (unit) => {
     const { e, n } = latLngToUtmStrings(unit.lat, unit.lng);
     setUnitForm({ id: unit.id, name: unit.name, role: unit.role, team: unit.team || '', status: unit.status, utmE: e, utmN: n });
     setEditUnitId(unit.id);
+    setUnitFormError('');
     setShowUnitForm(true);
   };
   const saveUnit = () => {
+    if (!unitForm.name.trim()) {
+      setUnitFormError('Navn er påkrevd.');
+      return;
+    }
+    setUnitFormError('');
     let lat, lng;
     if (unitForm.utmE && unitForm.utmN) {
       const result = utmStringsToLatLng(unitForm.utmE, unitForm.utmN);
@@ -128,15 +137,22 @@ export default function RightPanel({
   const openAddIncident = () => {
     setIncidentForm({ id: '', title: '', desc: '', priority: 'medium', utmE: '', utmN: '', icon: '🚨' });
     setEditIncidentId(null);
+    setIncidentFormError('');
     setShowIncidentForm(true);
   };
   const openEditIncident = (inc) => {
     const { e, n } = latLngToUtmStrings(inc.lat, inc.lng);
     setIncidentForm({ id: inc.id, title: inc.title, desc: inc.desc, priority: inc.priority, utmE: e, utmN: n, icon: inc.icon || '🚨' });
     setEditIncidentId(inc.id);
+    setIncidentFormError('');
     setShowIncidentForm(true);
   };
   const saveIncident = () => {
+    if (!incidentForm.title.trim()) {
+      setIncidentFormError('Tittel er påkrevd.');
+      return;
+    }
+    setIncidentFormError('');
     let lat, lng;
     if (incidentForm.utmE && incidentForm.utmN) {
       const result = utmStringsToLatLng(incidentForm.utmE, incidentForm.utmN);
@@ -241,10 +257,11 @@ export default function RightPanel({
                   <UnitForm
                     form={unitForm}
                     editId={editUnitId}
-                    onChange={(key, value) => setUnitForm(f => ({ ...f, [key]: value }))}
+                    onChange={(key, value) => { setUnitForm(f => ({ ...f, [key]: value })); if (key === 'name') setUnitFormError(''); }}
                     onRequestPick={onRequestPickLocation}
                     onSave={saveUnit}
-                    onCancel={() => setShowUnitForm(false)}
+                    onCancel={() => { setShowUnitForm(false); setUnitFormError(''); }}
+                    error={unitFormError}
                   />
                 )}
                 <div className="rp-list">
@@ -275,10 +292,11 @@ export default function RightPanel({
                   <IncidentForm
                     form={incidentForm}
                     editId={editIncidentId}
-                    onChange={(key, value) => setIncidentForm(f => ({ ...f, [key]: value }))}
+                    onChange={(key, value) => { setIncidentForm(f => ({ ...f, [key]: value })); if (key === 'title') setIncidentFormError(''); }}
                     onRequestPick={onRequestPickLocation}
                     onSave={saveIncident}
-                    onCancel={() => setShowIncidentForm(false)}
+                    onCancel={() => { setShowIncidentForm(false); setIncidentFormError(''); }}
+                    error={incidentFormError}
                   />
                 )}
                 <div className="rp-list">
