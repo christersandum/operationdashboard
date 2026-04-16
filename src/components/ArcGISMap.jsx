@@ -3,7 +3,7 @@ import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
-import WebTileLayer from '@arcgis/core/layers/WebTileLayer';
+import TileLayer from '@arcgis/core/layers/TileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
@@ -11,7 +11,6 @@ import Point from '@arcgis/core/geometry/Point';
 import Polygon from '@arcgis/core/geometry/Polygon';
 import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol';
 import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
-import CIMSymbol from '@arcgis/core/symbols/CIMSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
 import SearchSource from '@arcgis/core/widgets/Search/SearchSource';
@@ -24,25 +23,21 @@ import {
   SEARCH_PORTAL_URL,
   PORTAL_URL,
 } from '../data';
-import { wgs84ToUTM33N } from '../utils/coordUtils';
+import { wgs84ToUTM33N, utm33NToWGS84 } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// CartoDB free raster basemaps (no API key required)
-const BASEMAP_URLS = {
-  dark:   'https://{subDomain}.basemaps.cartocdn.com/dark_all/{level}/{col}/{row}.png',
-  light:  'https://{subDomain}.basemaps.cartocdn.com/light_all/{level}/{col}/{row}.png',
-  kanvas: 'https://{subDomain}.basemaps.cartocdn.com/rastertiles/voyager/{level}/{col}/{row}.png',
+// Geodata ArcGIS basemaps (UTM33/EUREF89)
+const BASEMAP_TILE_URLS = {
+  dark:   'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheGraatone/MapServer',
+  light:  'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheKart/MapServer',
+  kanvas: 'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheTerreng/MapServer',
 };
 
 // ── Helper: build a Basemap instance ────────────────────────
 function buildBasemap(basemapId) {
-  const url = BASEMAP_URLS[basemapId] ?? BASEMAP_URLS.dark;
+  const url = BASEMAP_TILE_URLS[basemapId] ?? BASEMAP_TILE_URLS.dark;
   return new Basemap({
-    baseLayers: [new WebTileLayer({
-      urlTemplate: url,
-      subDomains: ['a', 'b', 'c', 'd'],
-      copyright: '© OpenStreetMap contributors, © CARTO',
-    })],
+    baseLayers: [new TileLayer({ url, copyright: '© Geodata AS / Kartverket' })],
   });
 }
 
@@ -156,11 +151,13 @@ export default function ArcGISMap({
     mapRef.current = map;
 
     // ── MapView ──────────────────────────────────────────────
+    const initUTM = wgs84ToUTM33N(center[1], center[0]);
     const view = new MapView({
       container: mapDivRef.current,
       map: map,
-      center,
+      center: [initUTM.easting, initUTM.northing],
       zoom,
+      spatialReference: { wkid: 25833 },
       ui: { components: ['zoom'] },
       popup: { dockEnabled: true, dockOptions: { position: 'top-right', breakpoint: false } },
     });
@@ -261,8 +258,9 @@ export default function ArcGISMap({
     view.on('pointer-move', (evt) => {
       const pt = view.toMap({ x: evt.x, y: evt.y });
       if (pt && onCoordMove) {
-        const utm = wgs84ToUTM33N(pt.latitude, pt.longitude);
-        onCoordMove(pt.latitude, pt.longitude, utm);
+        const utm = { easting: Math.round(pt.x), northing: Math.round(pt.y) };
+        const wgs = utm33NToWGS84(pt.x, pt.y);
+        onCoordMove(wgs.lat, wgs.lng, utm);
       }
     });
 
@@ -270,8 +268,9 @@ export default function ArcGISMap({
     view.on('click', (evt) => {
       const pt = view.toMap({ x: evt.x, y: evt.y });
       if (pt && onMapClickRef.current) {
-        const utm = wgs84ToUTM33N(pt.latitude, pt.longitude);
-        onMapClickRef.current(pt.latitude, pt.longitude, utm);
+        const utm = { easting: Math.round(pt.x), northing: Math.round(pt.y) };
+        const wgs = utm33NToWGS84(pt.x, pt.y);
+        onMapClickRef.current(wgs.lat, wgs.lng, utm);
       }
     });
 
@@ -342,7 +341,8 @@ export default function ArcGISMap({
   // ── Fly to new center/zoom ─────────────────────────────────
   useEffect(() => {
     if (!viewRef.current) return;
-    viewRef.current.goTo({ center, zoom }, { animate: true, duration: 600 }).catch(() => {});
+    const { easting, northing } = wgs84ToUTM33N(center[1], center[0]);
+    viewRef.current.goTo({ center: [easting, northing], zoom }, { animate: true, duration: 600 }).catch(() => {});
   }, [center, zoom]);
 
   // ── Skoler/Barnehager visibility ──────────────────────────
@@ -357,9 +357,13 @@ export default function ArcGISMap({
     if (!aoLayerRef.current) return;
     aoLayerRef.current.removeAll();
     if (!aoCoords || aoCoords.length === 0) return;
+    const rings = [aoCoords.map(([lon, lat]) => {
+      const { easting, northing } = wgs84ToUTM33N(lat, lon);
+      return [easting, northing];
+    })];
     const polygon = new Polygon({
-      rings: [aoCoords],
-      spatialReference: { wkid: 4326 },
+      rings,
+      spatialReference: { wkid: 25833 },
     });
     const graphic = new Graphic({
       geometry: polygon,
@@ -386,16 +390,17 @@ export default function ArcGISMap({
     const existingIds = new Set(Object.keys(unitGraphicsRef.current));
 
     units.forEach(unit => {
-      const pt = new Point({ longitude: unit.lng, latitude: unit.lat, spatialReference: { wkid: 4326 } });
+      const { easting, northing } = wgs84ToUTM33N(unit.lat, unit.lng);
+      const pt = new Point({ x: easting, y: northing, spatialReference: { wkid: 25833 } });
 
       if (unitGraphicsRef.current[unit.id]) {
         const g = unitGraphicsRef.current[unit.id];
         g.geometry = pt;
-        g.symbol   = makeUnitCIMSymbol(unit);
+        g.symbol   = makeUnitSymbol(unit);
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeUnitCIMSymbol(unit),
+          symbol: makeUnitSymbol(unit),
           attributes: { ...unit },
           popupTemplate: makeUnitPopupTemplate(unit),
         });
@@ -419,16 +424,17 @@ export default function ArcGISMap({
     const existingIds = new Set(Object.keys(incidentGraphicsRef.current));
 
     incidents.forEach(inc => {
-      const pt = new Point({ longitude: inc.lng, latitude: inc.lat, spatialReference: { wkid: 4326 } });
+      const { easting, northing } = wgs84ToUTM33N(inc.lat, inc.lng);
+      const pt = new Point({ x: easting, y: northing, spatialReference: { wkid: 25833 } });
 
       if (incidentGraphicsRef.current[inc.id]) {
         const g = incidentGraphicsRef.current[inc.id];
         g.geometry = pt;
-        g.symbol   = makeIncidentCIMSymbol(inc);
+        g.symbol   = makeIncidentSymbol(inc);
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeIncidentCIMSymbol(inc),
+          symbol: makeIncidentSymbol(inc),
           attributes: { ...inc },
           popupTemplate: makeIncidentPopupTemplate(inc),
         });
@@ -458,17 +464,18 @@ export default function ArcGISMap({
       // Use provided random position or fall back to incident location
       const pos = (missionPositions && missionPositions[mission.id]) || { lat: inc.lat, lng: inc.lng };
 
-      const pt = new Point({ longitude: pos.lng, latitude: pos.lat, spatialReference: { wkid: 4326 } });
+      const { easting, northing } = wgs84ToUTM33N(pos.lat, pos.lng);
+      const pt = new Point({ x: easting, y: northing, spatialReference: { wkid: 25833 } });
       const completed = mission.status === 'completed';
 
       if (missionGraphicsRef.current[mission.id]) {
         const g = missionGraphicsRef.current[mission.id];
         g.geometry = pt;
-        g.symbol = makeMissionCIMSymbol(completed);
+        g.symbol = makeMissionSymbol(completed);
       } else {
         const g = new Graphic({
           geometry: pt,
-          symbol: makeMissionCIMSymbol(completed),
+          symbol: makeMissionSymbol(completed),
           attributes: { ...mission },
           popupTemplate: new PopupTemplate({
             title: `📋 ${mission.title}`,
@@ -573,208 +580,39 @@ export default function ArcGISMap({
 
 // ── Helpers ────────────────────────────────────────────────
 
-// ── Role → emoji mapping ───────────────────────────────────
-const ROLE_EMOJI = {
-  'Politipatrulje':   '🚓',
-  'Beredskapstropp':  '🦅',
-  'Taktisk team':     '🎯',
-  'Kommandopost':     '📡',
-  'Medisinsk enhet':  '🏥',
-  'Utrykkingsenhet':  '🚑',
-  'Etterretning':     '🔍',
-  'Rekognosering':    '🔭',
-  'Infanterienhet':   '🪖',
-  'Støtteenhet':      '🪖',
-  'EOD-team':         '💣',
-  'EOD-støtte':       '💣',
-  'Logistikk':        '🚚',
-  'Flyliaison':       '🚁',
-  'Flystøtte':        '🚁',
-};
-
-// ── Build a circle ring for CIMSymbol background ──────────
-function buildCircleRing(radius, steps = 16) {
-  const pts = [];
-  for (let i = 0; i <= steps; i++) {
-    const angle = (i / steps) * 2 * Math.PI;
-    pts.push([radius * Math.cos(angle), radius * Math.sin(angle)]);
-  }
-  return pts;
+// ── Simple marker symbol for units ────────────────────────
+function makeUnitSymbol(unit) {
+  const color = getStatusColorRgba(unit.status);
+  return {
+    type: 'simple-marker',
+    style: 'circle',
+    color: `rgba(${color[0]},${color[1]},${color[2]},${color[3] / 255})`,
+    size: 14,
+    outline: { color: 'white', width: 1.5 },
+  };
 }
 
-// ── Pre-computed geometry constants ───────────────────────
-const INCIDENT_SQUARE_RING = [[-11, -11], [11, -11], [11, 11], [-11, 11], [-11, -11]];
-const MISSION_SQUARE_RING  = [[-7, -7],  [7, -7],  [7, 7],  [-7, 7],  [-7, -7]];
-
-// ── CIMSymbol for units ────────────────────────────────────
-function makeUnitCIMSymbol(unit) {
-  const emoji = ROLE_EMOJI[unit.role] || '🪖';
-  const statusColor = getStatusColorRgba(unit.status);
-  return new CIMSymbol({
-    data: {
-      type: 'CIMSymbolReference',
-      symbol: {
-        type: 'CIMPointSymbol',
-        symbolLayers: [
-          // Background circle
-          {
-            type: 'CIMVectorMarker',
-            enable: true,
-            anchorPoint: { x: 0, y: 0 },
-            anchorPointUnits: 'Relative',
-            size: 24,
-            frame: { xmin: -12, ymin: -12, xmax: 12, ymax: 12 },
-            markerGraphics: [{
-              type: 'CIMMarkerGraphic',
-              geometry: { rings: [buildCircleRing(12)] },
-              symbol: {
-                type: 'CIMPolygonSymbol',
-                symbolLayers: [
-                  { type: 'CIMSolidFill',   enable: true, color: statusColor },
-                  { type: 'CIMSolidStroke', enable: true, color: [255, 255, 255, 200], width: 1.5 },
-                ],
-              },
-            }],
-          },
-          // Emoji text
-          {
-            type: 'CIMVectorMarker',
-            enable: true,
-            anchorPoint: { x: 0, y: 0 },
-            anchorPointUnits: 'Relative',
-            size: 14,
-            frame: { xmin: -7, ymin: -7, xmax: 7, ymax: 7 },
-            markerGraphics: [{
-              type: 'CIMMarkerGraphic',
-              geometry: { x: 0, y: 0 },
-              symbol: {
-                type: 'CIMTextSymbol',
-                fontFamilyName: 'Segoe UI Emoji',
-                height: 12,
-                horizontalAlignment: 'Center',
-                verticalAlignment: 'Center',
-                symbol: { type: 'CIMPolygonSymbol', symbolLayers: [] },
-              },
-              textString: emoji,
-            }],
-          },
-        ],
-      },
-    },
-  });
-}
-
-// ── CIMSymbol for incidents ────────────────────────────────
-function makeIncidentCIMSymbol(inc) {
-  const emoji = inc.icon || '❗';
+// ── Simple marker symbol for incidents ────────────────────
+function makeIncidentSymbol(inc) {
   const color = getPriorityColorRgba(inc.priority);
-  return new CIMSymbol({
-    data: {
-      type: 'CIMSymbolReference',
-      symbol: {
-        type: 'CIMPointSymbol',
-        symbolLayers: [
-          // Background square
-          {
-            type: 'CIMVectorMarker',
-            enable: true,
-            anchorPoint: { x: 0, y: 0 },
-            anchorPointUnits: 'Relative',
-            size: 24,
-            frame: { xmin: -12, ymin: -12, xmax: 12, ymax: 12 },
-            markerGraphics: [{
-              type: 'CIMMarkerGraphic',
-              geometry: { rings: [INCIDENT_SQUARE_RING] },
-              symbol: {
-                type: 'CIMPolygonSymbol',
-                symbolLayers: [
-                  { type: 'CIMSolidFill',   enable: true, color },
-                  { type: 'CIMSolidStroke', enable: true, color: [255, 255, 255, 200], width: 1.5 },
-                ],
-              },
-            }],
-          },
-          // Emoji text
-          {
-            type: 'CIMVectorMarker',
-            enable: true,
-            anchorPoint: { x: 0, y: 0 },
-            anchorPointUnits: 'Relative',
-            size: 14,
-            frame: { xmin: -7, ymin: -7, xmax: 7, ymax: 7 },
-            markerGraphics: [{
-              type: 'CIMMarkerGraphic',
-              geometry: { x: 0, y: 0 },
-              symbol: {
-                type: 'CIMTextSymbol',
-                fontFamilyName: 'Segoe UI Emoji',
-                height: 12,
-                horizontalAlignment: 'Center',
-                verticalAlignment: 'Center',
-                symbol: { type: 'CIMPolygonSymbol', symbolLayers: [] },
-              },
-              textString: emoji,
-            }],
-          },
-        ],
-      },
-    },
-  });
+  return {
+    type: 'simple-marker',
+    style: 'square',
+    color: `rgba(${color[0]},${color[1]},${color[2]},${color[3] / 255})`,
+    size: 16,
+    outline: { color: 'white', width: 1.5 },
+  };
 }
 
-// ── CIMSymbol for missions ─────────────────────────────────
-function makeMissionCIMSymbol(completed) {
-  const color = completed ? [46, 204, 113, 200] : [231, 76, 60, 200];
-  return new CIMSymbol({
-    data: {
-      type: 'CIMSymbolReference',
-      symbol: {
-        type: 'CIMPointSymbol',
-        symbolLayers: [
-          {
-            type: 'CIMVectorMarker',
-            enable: true,
-            anchorPoint: { x: 0, y: 0 },
-            anchorPointUnits: 'Relative',
-            size: 14,
-            frame: { xmin: -7, ymin: -7, xmax: 7, ymax: 7 },
-            markerGraphics: [{
-              type: 'CIMMarkerGraphic',
-              geometry: { rings: [MISSION_SQUARE_RING] },
-              symbol: {
-                type: 'CIMPolygonSymbol',
-                symbolLayers: [
-                  { type: 'CIMSolidFill',   enable: true, color },
-                  { type: 'CIMSolidStroke', enable: true, color: [255, 255, 255, 200], width: 1 },
-                ],
-              },
-            }],
-          },
-          {
-            type: 'CIMVectorMarker',
-            enable: true,
-            anchorPoint: { x: 0, y: 0 },
-            anchorPointUnits: 'Relative',
-            size: 10,
-            frame: { xmin: -5, ymin: -5, xmax: 5, ymax: 5 },
-            markerGraphics: [{
-              type: 'CIMMarkerGraphic',
-              geometry: { x: 0, y: 0 },
-              symbol: {
-                type: 'CIMTextSymbol',
-                fontFamilyName: 'Segoe UI Emoji',
-                height: 9,
-                horizontalAlignment: 'Center',
-                verticalAlignment: 'Center',
-                symbol: { type: 'CIMPolygonSymbol', symbolLayers: [] },
-              },
-              textString: '📋',
-            }],
-          },
-        ],
-      },
-    },
-  });
+// ── Simple marker symbol for missions ─────────────────────
+function makeMissionSymbol(completed) {
+  return {
+    type: 'simple-marker',
+    style: 'diamond',
+    color: completed ? 'rgba(46,204,113,0.8)' : 'rgba(231,76,60,0.8)',
+    size: 12,
+    outline: { color: 'white', width: 1 },
+  };
 }
 
 function getStatusColorRgba(status) {
