@@ -552,27 +552,26 @@ export default function App() {
     }
   }
 
-  function startAlertInterval(intervalSec) {
-    if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
-    alertIntervalRef.current = setInterval(() => {
-      if (!isPlayingRef.current) return;
-      // Cycle through ALERTS_SWORD pool (Feature 10)
-      const pool = ALERTS_SWORD;
-      if (pool.length > 0) {
-        const alert = pool[alertPoolIndexRef.current % pool.length];
-        alertPoolIndexRef.current++;
+  function startAlertSequence() {
+    ALERTS_SWORD.forEach((alert, idx) => {
+      const t = setTimeout(() => {
+        if (!isPlayingRef.current) return;
         setStats(prev => ({ ...prev, alerts: prev.alerts + 1 }));
         addChat({
-          sender: 'System', initials: '⚙', color: alert.icon_color || '#f39c12', system: true,
+          sender: 'System',
+          initials: '⚙',
+          color: alert.icon_color || '#f39c12',
+          system: true,
           text: `${alert.icon} ${alert.text}`,
         });
-      }
-    }, intervalSec * 1000);
+      }, (idx + 1) * 5000);
+      simTimers.current.push(t);
+    });
   }
 
   useEffect(() => {
     loadOperation();
-    startAlertInterval(timingSettingsRef.current.warningInterval);
+    startAlertSequence();
 
     // Silently check if already signed in (only when ArcGIS is enabled)
     if (ARCGIS_ENABLED) {
@@ -593,7 +592,6 @@ export default function App() {
       simTimers.current.forEach(clearTimeout);
       if (moveInterval.current) clearInterval(moveInterval.current);
       if (progressInterval.current) clearInterval(progressInterval.current);
-      if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1231,10 +1229,6 @@ export default function App() {
           const merged = { ...timingSettingsRef.current, ...s };
           timingSettingsRef.current = merged;
           setTimingSettings(merged);
-          if (s.warningInterval !== undefined) {
-            alertIntervalSecRef.current = s.warningInterval;
-            startAlertInterval(s.warningInterval);
-          }
         }}
         timingConfig={timingSettings}
         portalUser={portalUser}
