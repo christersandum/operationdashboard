@@ -418,6 +418,12 @@ arcgis-map {
   border-bottom: 1px solid var(--border-color);
 }
 
+.map-layer-dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 8px 0;
+}
+
 /* ── Large Play/Pause button (Feature 9) ─────────────────── */
 .map-play-pause-btn {
   position: absolute;

@@ -14,11 +14,11 @@ import Search from '@arcgis/core/widgets/Search';
 import { wgs84ToUTM33N } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Geodata Online VectorTile basemaps — publicly accessible endpoints
+// Geodata Online VectorTile basemaps — Web Mercator endpoints
 const BASEMAP_TILE_URLS = {
-  dark:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone/VectorTileServer',
-  light: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheBasis/VectorTileServer',
-  topo:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheTopografiskGra/VectorTileServer',
+  dark:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer',
+  grey:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer',
+  basis: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheBasis_WM/VectorTileServer',
 };
 
 // ── Helper: build a Basemap instance ────────────────────────
@@ -65,6 +65,7 @@ export default function ArcGISMap({
 
   // Single "Kartlag" dropdown state
   const [kartlagOpen, setKartlagOpen] = useState(false);
+  const [activeBasemap, setActiveBasemap] = useState('dark');
   // Internal visibility state (synced from props)
   const [localUnitsVisible,     setLocalUnitsVisible]     = useState(unitsVisible !== false);
   const [localIncidentsVisible, setLocalIncidentsVisible] = useState(incidentsVisible !== false);
@@ -260,8 +261,8 @@ export default function ArcGISMap({
     const graphic = new Graphic({
       geometry: polygon,
       symbol: new SimpleFillSymbol({
-        color: [0, 120, 212, 30],
-        outline: new SimpleLineSymbol({ color: [0, 120, 212, 153], width: 1.5, style: 'dash' }),
+        color: [0, 0, 0, 0],
+        outline: new SimpleLineSymbol({ color: [0, 120, 212, 220], width: 2, style: 'solid' }),
       }),
       popupTemplate: new PopupTemplate({ title: aoLabel }),
     });
@@ -392,13 +393,14 @@ export default function ArcGISMap({
   const handleIncToggle      = (v) => { setLocalIncidentsVisible(v); if (incidentLayerRef.current) incidentLayerRef.current.visible = v; if (onIncidentsVisibleChange) onIncidentsVisibleChange(v); };
   const handleMissionsToggle = (v) => { setLocalMissionsVisible(v);  if (missionLayerRef.current) missionLayerRef.current.visible = v;  if (onMissionsVisibleChange) onMissionsVisibleChange(v); };
   const handleAoToggle       = (v) => { setLocalAoVisible(v);        if (aoLayerRef.current) aoLayerRef.current.visible = v;           if (onAoVisibleChange) onAoVisibleChange(v); };
+  const handleBasemapChange  = (id) => { setActiveBasemap(id);       if (mapRef.current) mapRef.current.basemap = buildBasemap(id); };
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={mapDivRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Single "Kartlag" dropdown — top-left */}
-      <div className="map-layer-dropdown" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}>
+      {/* Single "Kartlag" dropdown — top-center */}
+      <div className="map-layer-dropdown" style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
         <button
           className={`map-layer-dropdown-btn${kartlagOpen ? ' active' : ''}`}
           onClick={() => setKartlagOpen(v => !v)}
@@ -432,6 +434,17 @@ export default function ArcGISMap({
               <input type="checkbox" checked={localAoVisible} onChange={e => handleAoToggle(e.target.checked)} />
               🗺 AO-område
             </label>
+            <div className="map-layer-dropdown-divider" />
+            <div className="map-layer-dropdown-title">Bakgrunnskart</div>
+            {[['dark', '🌑 Mørk'], ['grey', '🌫 Grå'], ['basis', '🗺 Basis']].map(([id, label]) => (
+              <button
+                key={id}
+                className={`basemap-option${activeBasemap === id ? ' active' : ''}`}
+                onClick={() => handleBasemapChange(id)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
       </div>
