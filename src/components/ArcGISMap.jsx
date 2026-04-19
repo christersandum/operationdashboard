@@ -13,7 +13,6 @@ import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol';
 import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
-import SearchSource from '@arcgis/core/widgets/Search/SearchSource';
 import PortalItem from '@arcgis/core/portal/PortalItem';
 import {
   SKOLER_BARNEHAGER_URL,
@@ -70,11 +69,17 @@ export default function ArcGISMap({
 }) {
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
-  const drawAOModeRef = useRef(drawAOMode);
   const onMapClickRef = useRef(onMapClick);
   const mapRef      = useRef(null);
   const basemapRef  = useRef(basemap);
   const isSignedInRef = useRef(isSignedIn);
+
+  // Refs for values needed inside the init closure to avoid stale captures
+  const centerRef                  = useRef(center);
+  const zoomRef                    = useRef(zoom);
+  const basemapInitRef             = useRef(basemap);
+  const webmapIdRef                = useRef(webmapId);
+  const skolerBarnehagerVisibleRef = useRef(skolerBarnehagerVisible);
 
   // Feature 8: two dropdown states
   const [kartlagOpen, setKartlagOpen] = useState(false);
@@ -96,16 +101,29 @@ export default function ArcGISMap({
   const incidentGraphicsRef = useRef({});
   const missionGraphicsRef  = useRef({});
 
+  // ── Keep init-closure refs in sync with latest props ─────────
+  useEffect(() => {
+    centerRef.current                  = center;
+    zoomRef.current                    = zoom;
+    basemapInitRef.current             = basemap;
+    webmapIdRef.current                = webmapId;
+    skolerBarnehagerVisibleRef.current = skolerBarnehagerVisible;
+  }, [center, zoom, basemap, webmapId, skolerBarnehagerVisible]);
+
   // ── Init map once ──────────────────────────────────────────
   useEffect(() => {
+    // Guard against React StrictMode double-invoke: a local flag (not a ref)
+    // means the second synchronous call after cleanup will also be skipped.
+    let initialized = false;
     if (!mapDivRef.current || viewRef.current) return;
+    initialized = true;
 
     // ── Skoler og barnehager FeatureLayer ────────────────────
     const skolerLayer = new FeatureLayer({
       url: SKOLER_BARNEHAGER_URL,
       id: 'skoler_barnehager',
       title: 'Skoler og barnehager',
-      visible: !!skolerBarnehagerVisible,
+      visible: !!skolerBarnehagerVisibleRef.current,
       renderer: {
         type: 'simple',
         symbol: {
@@ -131,8 +149,8 @@ export default function ArcGISMap({
 
     // ── Map: use WebMap if webmapId is given (Feature 1), else offline basemap ──
     let map;
-    if (webmapId) {
-      map = new WebMap({ portalItem: { id: webmapId } });
+    if (webmapIdRef.current) {
+      map = new WebMap({ portalItem: { id: webmapIdRef.current } });
       map.add(skolerLayer);
       map.add(aoLayer);
       map.add(missionLayer);
@@ -140,19 +158,19 @@ export default function ArcGISMap({
       map.add(unitLayer);
     } else {
       map = new Map({
-        basemap: buildBasemap(basemap),
+        basemap: buildBasemap(basemapInitRef.current),
         layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
       });
     }
     mapRef.current = map;
 
     // ── MapView ──────────────────────────────────────────────
-    const initUTM = wgs84ToUTM33N(center[1], center[0]);
+    const initUTM = wgs84ToUTM33N(centerRef.current[1], centerRef.current[0]);
     const view = new MapView({
       container: mapDivRef.current,
       map: map,
       center: [initUTM.easting, initUTM.northing],
-      zoom,
+      zoom: zoomRef.current,
       spatialReference: { wkid: 25833 },
       ui: { components: ['zoom'] },
       popup: { dockEnabled: true, dockOptions: { position: 'top-right', breakpoint: false } },
@@ -161,6 +179,9 @@ export default function ArcGISMap({
 
     // ── Search widget with locator from beredskap portal ─────
     view.when(async () => {
+      // Guard: bail out if the component unmounted before view was ready
+      if (view.destroyed) return;
+
       // Report initial zoom once the view is ready
       if (onZoomChange) onZoomChange(Math.round(view.zoom));
 
@@ -188,7 +209,7 @@ export default function ArcGISMap({
       }
 
       // Always include Kartverket free geocoding as a fallback for Norwegian addresses
-      const kartverkSource = new SearchSource({
+      const kartverkSource = {
         name: 'Adressesøk (Kartverket)',
         placeholder: 'Søk adresse i Norge…',
         maxSuggestions: 6,
@@ -234,7 +255,7 @@ export default function ArcGISMap({
             return [];
           }
         },
-      });
+      };
       searchSources.push(kartverkSource);
 
       // Disable default ArcGIS sources — they require an API key or portal auth.
@@ -247,7 +268,7 @@ export default function ArcGISMap({
       });
       view.ui.add(searchWidget, 'top-right');
 
-      if (onViewReady) onViewReady(view);
+      if (!view.destroyed && onViewReady) onViewReady(view);
     });
 
     // ── Pointer move → UTM33 coords ──────────────────────────
@@ -275,8 +296,15 @@ export default function ArcGISMap({
     });
 
     return () => {
+      if (!initialized) return;
       view.destroy();
       viewRef.current = null;
+      mapRef.current = null;
+      skolerLayerRef.current = null;
+      unitLayerRef.current = null;
+      incidentLayerRef.current = null;
+      missionLayerRef.current = null;
+      aoLayerRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -285,15 +313,19 @@ export default function ArcGISMap({
     isSignedInRef.current = isSignedIn;
   }, [isSignedIn]);
 
-  // ── Sync drawAOMode ref ────────────────────────────────────
-  useEffect(() => {
-    drawAOModeRef.current = drawAOMode;
-  }, [drawAOMode]);
-
   // ── Sync onMapClick ref (fix stale closure bug) ────────────
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
+
+  // ── Sync local visibility state when props change (Feature 8) ────────────
+  useEffect(() => {
+    setLocalUnitsVisible(unitsVisible !== false);
+    setLocalIncidentsVisible(incidentsVisible !== false);
+    setLocalMissionsVisible(missionsVisible !== false);
+    setLocalAoVisible(aoVisible !== false);
+    setLocalSkolerVisible(!!skolerBarnehagerVisible);
+  }, [unitsVisible, incidentsVisible, missionsVisible, aoVisible, skolerBarnehagerVisible]);
 
   // ── Picking location → crosshair cursor ───────────────────
   useEffect(() => {
@@ -305,10 +337,11 @@ export default function ArcGISMap({
   // ── Basemap switch ────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current) return;
+    if (webmapId) return;
     if (basemap === basemapRef.current) return;
     mapRef.current.basemap = buildBasemap(basemap);
     basemapRef.current = basemap;
-  }, [basemap]);
+  }, [basemap, webmapId]);
 
   // ── Fly to new center/zoom ─────────────────────────────────
   useEffect(() => {
@@ -340,8 +373,8 @@ export default function ArcGISMap({
     const graphic = new Graphic({
       geometry: polygon,
       symbol: new SimpleFillSymbol({
-        color: [0, 120, 212, 0.06],
-        outline: new SimpleLineSymbol({ color: [0, 120, 212, 0.6], width: 1.5, style: 'dash' }),
+        color: [0, 120, 212, 30],
+        outline: new SimpleLineSymbol({ color: [0, 120, 212, 153], width: 1.5, style: 'dash' }),
       }),
       popupTemplate: new PopupTemplate({ title: aoLabel }),
     });
