@@ -1,10 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Map from '@arcgis/core/Map';
-import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
 import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
-import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
@@ -13,12 +11,6 @@ import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol';
 import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
-import PortalItem from '@arcgis/core/portal/PortalItem';
-import {
-  SKOLER_BARNEHAGER_URL,
-  SEARCH_LOCATOR_ITEM_ID,
-  SEARCH_PORTAL_URL,
-} from '../data';
 import { wgs84ToUTM33N, utm33NToWGS84 } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
@@ -53,10 +45,7 @@ export default function ArcGISMap({
   onZoomChange,
   drawAOMode,
   onMapClick,
-  skolerBarnehagerVisible,
   pickingLocation,
-  isSignedIn,
-  webmapId,
   // Layer visibility callbacks (Feature 8)
   unitsVisible,
   incidentsVisible,
@@ -65,33 +54,26 @@ export default function ArcGISMap({
   onIncidentsVisibleChange,
   onMissionsVisibleChange,
   onAoVisibleChange,
-  onSkolerVisibleChange,
 }) {
   const mapDivRef   = useRef(null);
   const viewRef     = useRef(null);
   const onMapClickRef = useRef(onMapClick);
   const mapRef      = useRef(null);
   const basemapRef  = useRef(basemap);
-  const isSignedInRef = useRef(isSignedIn);
 
   // Refs for values needed inside the init closure to avoid stale captures
   const centerRef                  = useRef(center);
   const zoomRef                    = useRef(zoom);
   const basemapInitRef             = useRef(basemap);
-  const webmapIdRef                = useRef(webmapId);
-  const skolerBarnehagerVisibleRef = useRef(skolerBarnehagerVisible);
 
-  // Feature 8: two dropdown states
-  const [kartlagOpen, setKartlagOpen] = useState(false);
+  // Feature 8: dropdown state
   const [opsdataOpen, setOpsdataOpen] = useState(false);
   // Internal visibility state (synced from props)
   const [localUnitsVisible, setLocalUnitsVisible] = useState(unitsVisible !== false);
   const [localIncidentsVisible, setLocalIncidentsVisible] = useState(incidentsVisible !== false);
   const [localMissionsVisible, setLocalMissionsVisible] = useState(missionsVisible !== false);
   const [localAoVisible, setLocalAoVisible] = useState(aoVisible !== false);
-  const [localSkolerVisible, setLocalSkolerVisible] = useState(!!skolerBarnehagerVisible);
 
-  const skolerLayerRef   = useRef(null);
   const unitLayerRef     = useRef(null);
   const incidentLayerRef = useRef(null);
   const missionLayerRef  = useRef(null);
@@ -103,12 +85,10 @@ export default function ArcGISMap({
 
   // ── Keep init-closure refs in sync with latest props ─────────
   useEffect(() => {
-    centerRef.current                  = center;
-    zoomRef.current                    = zoom;
-    basemapInitRef.current             = basemap;
-    webmapIdRef.current                = webmapId;
-    skolerBarnehagerVisibleRef.current = skolerBarnehagerVisible;
-  }, [center, zoom, basemap, webmapId, skolerBarnehagerVisible]);
+    centerRef.current      = center;
+    zoomRef.current        = zoom;
+    basemapInitRef.current = basemap;
+  }, [center, zoom, basemap]);
 
   // ── Init map once ──────────────────────────────────────────
   useEffect(() => {
@@ -117,25 +97,6 @@ export default function ArcGISMap({
     let initialized = false;
     if (!mapDivRef.current || viewRef.current) return;
     initialized = true;
-
-    // ── Skoler og barnehager FeatureLayer ────────────────────
-    const skolerLayer = new FeatureLayer({
-      url: SKOLER_BARNEHAGER_URL,
-      id: 'skoler_barnehager',
-      title: 'Skoler og barnehager',
-      visible: !!skolerBarnehagerVisibleRef.current,
-      renderer: {
-        type: 'simple',
-        symbol: {
-          type: 'simple-marker',
-          style: 'square',
-          color: [255, 200, 0, 180],
-          size: 8,
-          outline: { color: [255, 200, 0, 255], width: 1.5 },
-        },
-      },
-    });
-    skolerLayerRef.current = skolerLayer;
 
     // ── Operational graphics layers ──────────────────────────
     const unitLayer     = new GraphicsLayer({ id: 'units',     title: 'Enheter'   });
@@ -147,21 +108,10 @@ export default function ArcGISMap({
     missionLayerRef.current  = missionLayer;
     aoLayerRef.current       = aoLayer;
 
-    // ── Map: use WebMap if webmapId is given (Feature 1), else offline basemap ──
-    let map;
-    if (webmapIdRef.current) {
-      map = new WebMap({ portalItem: { id: webmapIdRef.current } });
-      map.add(skolerLayer);
-      map.add(aoLayer);
-      map.add(missionLayer);
-      map.add(incidentLayer);
-      map.add(unitLayer);
-    } else {
-      map = new Map({
-        basemap: buildBasemap(basemapInitRef.current),
-        layers: [skolerLayer, aoLayer, missionLayer, incidentLayer, unitLayer],
-      });
-    }
+    const map = new Map({
+      basemap: buildBasemap(basemapInitRef.current),
+      layers: [aoLayer, missionLayer, incidentLayer, unitLayer],
+    });
     mapRef.current = map;
 
     // ── MapView ──────────────────────────────────────────────
@@ -177,38 +127,14 @@ export default function ArcGISMap({
     });
     viewRef.current = view;
 
-    // ── Search widget with locator from beredskap portal ─────
-    view.when(async () => {
+    // ── Search widget using Kartverket free geocoding ────────
+    view.when(() => {
       // Guard: bail out if the component unmounted before view was ready
       if (view.destroyed) return;
 
       // Report initial zoom once the view is ready
       if (onZoomChange) onZoomChange(Math.round(view.zoom));
 
-      let searchSources = [];
-      if (isSignedInRef.current) {
-        try {
-          const portalItem = new PortalItem({
-            id: SEARCH_LOCATOR_ITEM_ID,
-            portal: { url: SEARCH_PORTAL_URL },
-          });
-          await portalItem.load();
-          if (portalItem.url) {
-            searchSources = [{
-              url: portalItem.url,
-              singleLineFieldName: 'SingleLine',
-              name: 'Adressesøk (DSB)',
-              placeholder: 'Søk sted eller adresse…',
-              outFields: ['*'],
-            }];
-          }
-        } catch (err) {
-          // Portal item unavailable (network error or insufficient permissions)
-          console.warn('[ArcGISMap] Could not load search locator from portal item:', err);
-        }
-      }
-
-      // Always include Kartverket free geocoding as a fallback for Norwegian addresses
       const kartverkSource = {
         name: 'Adressesøk (Kartverket)',
         placeholder: 'Søk adresse i Norge…',
@@ -256,15 +182,12 @@ export default function ArcGISMap({
           }
         },
       };
-      searchSources.push(kartverkSource);
 
-      // Disable default ArcGIS sources — they require an API key or portal auth.
-      // Kartverket source above provides free Norwegian address search without auth.
       const searchWidget = new Search({
         view,
         includeDefaultSources: false,
-        sources: searchSources,
-        searchAllEnabled: searchSources.length > 1,
+        sources: [kartverkSource],
+        searchAllEnabled: false,
       });
       view.ui.add(searchWidget, 'top-right');
 
@@ -300,18 +223,12 @@ export default function ArcGISMap({
       view.destroy();
       viewRef.current = null;
       mapRef.current = null;
-      skolerLayerRef.current = null;
       unitLayerRef.current = null;
       incidentLayerRef.current = null;
       missionLayerRef.current = null;
       aoLayerRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Sync isSignedIn ref (prevents stale closure in async init) ─
-  useEffect(() => {
-    isSignedInRef.current = isSignedIn;
-  }, [isSignedIn]);
 
   // ── Sync onMapClick ref (fix stale closure bug) ────────────
   useEffect(() => {
@@ -324,8 +241,7 @@ export default function ArcGISMap({
     setLocalIncidentsVisible(incidentsVisible !== false);
     setLocalMissionsVisible(missionsVisible !== false);
     setLocalAoVisible(aoVisible !== false);
-    setLocalSkolerVisible(!!skolerBarnehagerVisible);
-  }, [unitsVisible, incidentsVisible, missionsVisible, aoVisible, skolerBarnehagerVisible]);
+  }, [unitsVisible, incidentsVisible, missionsVisible, aoVisible]);
 
   // ── Picking location → crosshair cursor ───────────────────
   useEffect(() => {
@@ -337,11 +253,10 @@ export default function ArcGISMap({
   // ── Basemap switch ────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current) return;
-    if (webmapId) return;
     if (basemap === basemapRef.current) return;
     mapRef.current.basemap = buildBasemap(basemap);
     basemapRef.current = basemap;
-  }, [basemap, webmapId]);
+  }, [basemap]);
 
   // ── Fly to new center/zoom ─────────────────────────────────
   useEffect(() => {
@@ -349,13 +264,6 @@ export default function ArcGISMap({
     const { easting, northing } = wgs84ToUTM33N(center[1], center[0]);
     viewRef.current.goTo({ center: [easting, northing], zoom }, { animate: true, duration: 600 }).catch(() => {});
   }, [center, zoom]);
-
-  // ── Skoler/Barnehager visibility ──────────────────────────
-  useEffect(() => {
-    if (skolerLayerRef.current) {
-      skolerLayerRef.current.visible = !!skolerBarnehagerVisible;
-    }
-  }, [skolerBarnehagerVisible]);
 
   // ── AO polygon ────────────────────────────────────────────
   useEffect(() => {
@@ -509,7 +417,6 @@ export default function ArcGISMap({
   const handleIncToggle     = (v) => { setLocalIncidentsVisible(v); if (incidentLayerRef.current) incidentLayerRef.current.visible = v; if (onIncidentsVisibleChange) onIncidentsVisibleChange(v); };
   const handleMissionsToggle = (v) => { setLocalMissionsVisible(v);  if (missionLayerRef.current) missionLayerRef.current.visible = v;  if (onMissionsVisibleChange) onMissionsVisibleChange(v); };
   const handleAoToggle      = (v) => { setLocalAoVisible(v);        if (aoLayerRef.current) aoLayerRef.current.visible = v;           if (onAoVisibleChange) onAoVisibleChange(v); };
-  const handleSkolerToggle  = (v) => { setLocalSkolerVisible(v);    if (skolerLayerRef.current) skolerLayerRef.current.visible = v;    if (onSkolerVisibleChange) onSkolerVisibleChange(v); };
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -519,7 +426,7 @@ export default function ArcGISMap({
       <div className="map-layer-dropdown" style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10 }}>
         <button
           className={`map-layer-dropdown-btn${opsdataOpen ? ' active' : ''}`}
-          onClick={() => { setOpsdataOpen(v => !v); setKartlagOpen(false); }}
+          onClick={() => setOpsdataOpen(v => !v)}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -548,33 +455,6 @@ export default function ArcGISMap({
             <label className="layer-item">
               <input type="checkbox" checked={localAoVisible} onChange={e => handleAoToggle(e.target.checked)} />
               🗺 AO-område
-            </label>
-          </div>
-        )}
-      </div>
-
-      {/* Feature 8: Kartlag dropdown — top-left (below Operasjonsdata) */}
-      <div className="map-layer-dropdown" style={{ position: 'absolute', top: '52px', left: '10px', zIndex: 10 }}>
-        <button
-          className={`map-layer-dropdown-btn${kartlagOpen ? ' active' : ''}`}
-          onClick={() => { setKartlagOpen(v => !v); setOpsdataOpen(false); }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-            <polyline points="2 17 12 22 22 17"/>
-            <polyline points="2 12 12 17 22 12"/>
-          </svg>
-          Kartlag
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points={kartlagOpen ? '18 15 12 9 6 15' : '6 9 12 15 18 9'}/>
-          </svg>
-        </button>
-        {kartlagOpen && (
-          <div className="map-layer-dropdown-panel" onClick={e => e.stopPropagation()}>
-            <div className="map-layer-dropdown-title">Kartlag</div>
-            <label className="layer-item">
-              <input type="checkbox" checked={localSkolerVisible} onChange={e => handleSkolerToggle(e.target.checked)} />
-              🏫 Skoler og barnehager
             </label>
           </div>
         )}

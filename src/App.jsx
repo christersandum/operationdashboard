@@ -4,9 +4,7 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import RightPanel from './components/RightPanel';
 import OperationPicker from './components/OperationPicker';
-import WebMapPicker from './components/WebMapPicker';
-import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel, CalciteCheckbox } from '@esri/calcite-components-react';
-import { ARCGIS_ENABLED } from './data';
+import { CalciteShell, CalciteButton, CalciteDialog, CalciteInput, CalciteLabel } from '@esri/calcite-components-react';
 import {
   UNITS_SWORD,
   INCIDENTS_SWORD_STAGED,
@@ -16,20 +14,6 @@ import {
   ALERTS_SWORD,
 } from './utils/seedData';
 import { formatUTM33, wgs84ToUTM33N } from './utils/coordUtils';
-import { getPortalUser, createOperationFolder, listOperationFolders, getOperationServiceUrls } from './utils/portalService';
-import { seedNorwegianSword } from './utils/seedMigration';
-import IdentityManager from '@arcgis/core/identity/IdentityManager';
-import Portal from '@arcgis/core/portal/Portal';
-import {
-  saveOperation,
-  loadOperation as loadOperationFromService,
-  operationExistsInLayer,
-  addFeature,
-  listOperations,
-  clearLayerCache,
-} from './utils/featureServiceSync';
-import Graphic from '@arcgis/core/Graphic';
-import Point from '@arcgis/core/geometry/Point';
 import { createLocalProvider } from './services/localProvider';
 
 const ArcGISMap = lazy(() => import('./components/ArcGISMap'));
@@ -114,35 +98,12 @@ export default function App() {
   const [currentAoCoords, setCurrentAoCoords] = useState(null);
   const [newOpDialogOpen, setNewOpDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [skolerBarnehagerVisible, setSkolerBarnehagerVisible] = useState(false);
   const [basemapSelectorOpen, setBasemapSelectorOpen] = useState(false);
   const [pickingLocation, setPickingLocation] = useState(null); // null | 'unit' | 'incident'
   const [pickedLocation, setPickedLocation] = useState(null);   // { lat, lng, utm }
 
-  // Auth state
-  const [isSignedIn,      setIsSignedIn]      = useState(false);
-  const [signingIn,       setSigningIn]       = useState(false);
-  const [portalUser,      setPortalUser]      = useState(null);
-
-  // WebMap picker (Feature 1)
-  const [webmapPickerOpen,  setWebmapPickerOpen]  = useState(false);
-  const [webmapList,        setWebmapList]        = useState([]);
-  const [loadingWebmaps,    setLoadingWebmaps]    = useState(false);
-  const [selectedWebmapId,  setSelectedWebmapId]  = useState(null);
-
-  // ArcGIS Online service URLs (per-operation folder)
-  const [serviceUrls, setServiceUrls] = useState({});
-  const serviceUrlsRef = useRef({});
-
-  // Save dialog
-  const [saveConfirmOpen, setSaveConfirmOpen]   = useState(false);
-  const [savePendingData, setSavePendingData]   = useState(null);
-  const [saveOfflineCopy, setSaveOfflineCopy]   = useState(false);
-
   // Load / OperationPicker dialog
   const [loadDialogOpen,   setLoadDialogOpen]   = useState(false);
-  const [opFolders,        setOpFolders]        = useState([]);
-  const [loadingFolders,   setLoadingFolders]   = useState(false);
 
   // New operation name input
   const [newOpName, setNewOpName] = useState('');
@@ -573,81 +534,11 @@ export default function App() {
     loadOperation();
     startAlertSequence();
 
-    // Silently check if already signed in (only when ArcGIS is enabled)
-    if (ARCGIS_ENABLED) {
-      IdentityManager.checkSignInStatus('https://beredskap.maps.arcgis.com/sharing/rest')
-        .then(() => {
-          setIsSignedIn(true);
-          getPortalUser()
-            .then(user => setPortalUser(user))
-            .catch(err => console.warn('[App] Could not fetch portal user:', err));
-        })
-        .catch(() => {
-          // Not signed in — app works in offline mode with seed data
-          console.log('[App] Not signed in. Running in offline mode.');
-        });
-    }
-
     return () => {
       simTimers.current.forEach(clearTimeout);
       if (moveInterval.current) clearInterval(moveInterval.current);
       if (progressInterval.current) clearInterval(progressInterval.current);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Login handler ──────────────────────────────────────────
-  const handleLogin = useCallback(async () => {
-    try {
-      setSigningIn(true);
-      await IdentityManager.getCredential('https://beredskap.maps.arcgis.com/sharing/rest');
-      setIsSignedIn(true);
-      const user = await getPortalUser();
-      setPortalUser(user);
-      addSystemChat('✅ Logget inn som ' + (user?.fullName || user?.username || 'bruker'), '#2ecc71');
-
-      // Feature 1: Query portal for webmaps and show picker
-      setLoadingWebmaps(true);
-      setWebmapPickerOpen(true);
-      try {
-        const portal = new Portal({ url: 'https://beredskap.maps.arcgis.com' });
-        await portal.load();
-        const result = await portal.queryItems({ query: 'type:"Web Map"', num: 20 });
-        const items = (result.results || []).map(item => ({
-          id: item.id,
-          title: item.title,
-          snippet: item.snippet,
-          thumbnailUrl: item.thumbnailUrl,
-        }));
-        setWebmapList(items);
-      } catch (err) {
-        console.warn('[App] Could not query webmaps:', err);
-        setWebmapList([]);
-      } finally {
-        setLoadingWebmaps(false);
-      }
-    } catch (err) {
-      console.warn('[App] Login cancelled or failed:', err);
-      if (err?.name !== 'identity-manager:not-authenticated') {
-        addSystemChat('❌ Pålogging mislyktes. Prøv igjen.', '#e74c3c');
-      }
-    } finally {
-      setSigningIn(false);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Logout handler ─────────────────────────────────────────
-  const handleLogout = useCallback(async () => {
-    try {
-      IdentityManager.destroyCredentials();
-      clearLayerCache();
-      setIsSignedIn(false);
-      setPortalUser(null);
-      serviceUrlsRef.current = {};
-      setServiceUrls({});
-      addSystemChat('👋 Logget ut fra ArcGIS Online.', '#6b7280');
-    } catch (err) {
-      console.warn('[App] Logout error:', err);
-    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePlayPause = useCallback(() => {
@@ -735,87 +626,12 @@ export default function App() {
     setActiveTab('chat');
   };
 
-  // ── Helpers: build a UTM33 Point graphic for a unit ─────────
-  function makeUnitGraphic(unit, operationId) {
-    const SR_25833 = { wkid: 25833 };
-    const { easting, northing } = wgs84ToUTM33N(unit.lat, unit.lng);
-    return new Graphic({
-      geometry: new Point({ x: easting, y: northing, spatialReference: SR_25833 }),
-      attributes: {
-        Operation_id:          operationId,
-        Operation_name:        SEED_CONFIG.operationName,
-        unit_id:               unit.id,
-        name:                  unit.name,
-        role:                  unit.role,
-        status:                unit.status,
-        moving:                unit.moving ? 1 : 0,
-        assigned_incident:     unit.assignedIncident || null,
-        incident_color_index:  unit.incidentColorIndex ?? -1,
-        x_coord:               easting,
-        y_coord:               northing,
-      },
-    });
-  }
-
-  function makeIncidentGraphic(inc, operationId) {
-    const SR_25833 = { wkid: 25833 };
-    const { easting, northing } = wgs84ToUTM33N(inc.lat, inc.lng);
-    return new Graphic({
-      geometry: new Point({ x: easting, y: northing, spatialReference: SR_25833 }),
-      attributes: {
-        Operation_id:   operationId,
-        Operation_name: SEED_CONFIG.operationName,
-        incident_id:    inc.id,
-        title:          inc.title,
-        description:    inc.desc,
-        priority:       inc.priority,
-        icon:           inc.icon,
-        time:           inc.time || '',
-        color_index:    inc.colorIndex ?? 0,
-        x_coord:        easting,
-        y_coord:        northing,
-      },
-    });
-  }
-
-  function makeMissionGraphic(mission, incidents, operationId) {
-    const SR_25833 = { wkid: 25833 };
-    const inc = incidents.find(i => i.id === mission.incidentId);
-    const lat = inc ? inc.lat : 0;
-    const lng = inc ? inc.lng : 0;
-    const { easting, northing } = wgs84ToUTM33N(lat, lng);
-    return new Graphic({
-      geometry: new Point({ x: easting, y: northing, spatialReference: SR_25833 }),
-      attributes: {
-        Operation_id:      operationId,
-        Operation_name:    SEED_CONFIG.operationName,
-        mission_id:        mission.id,
-        incident_id:       mission.incidentId,
-        title:             mission.title,
-        description:       mission.desc,
-        status:            mission.status,
-        assigned_unit_ids: (mission.assignedUnitIds || []).join(','),
-        x_coord:           easting,
-        y_coord:           northing,
-      },
-    });
-  }
-
   const handleAddUnit = useCallback((unitData) => {
     const newUnit = { ...unitData, target: null, assignedIncident: null, incidentColorIndex: null, signal: 4 };
     unitsRef.current = [...unitsRef.current, newUnit];
     setUnits([...unitsRef.current]);
     setStats(prev => ({ ...prev, units: unitsRef.current.length }));
-    // Sync to ArcGIS Online if signed in
-    const urls = serviceUrlsRef.current;
-    if (urls?.units) {
-      addFeature(urls.units, makeUnitGraphic(newUnit, currentOpId))
-        .catch(err => {
-          console.warn('[App] addFeature(unit) failed:', err);
-          addSystemChat(`⚠ Synkronisering feilet for enhet: ${err.message}`, '#f39c12');
-        });
-    }
-  }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleEditUnit = useCallback((unitId, changes) => {
     unitsRef.current = unitsRef.current.map(u => u.id === unitId ? { ...u, ...changes } : u);
@@ -834,16 +650,7 @@ export default function App() {
     incidentsRef.current = [...incidentsRef.current, newInc];
     setIncidents([...incidentsRef.current]);
     setStats(prev => ({ ...prev, incidents: incidentsRef.current.length }));
-    // Sync to ArcGIS Online if signed in
-    const urls = serviceUrlsRef.current;
-    if (urls?.incidents) {
-      addFeature(urls.incidents, makeIncidentGraphic(newInc, currentOpId))
-        .catch(err => {
-          console.warn('[App] addFeature(incident) failed:', err);
-          addSystemChat(`⚠ Synkronisering feilet for hendelse: ${err.message}`, '#f39c12');
-        });
-    }
-  }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleEditIncident = useCallback((incId, changes) => {
     incidentsRef.current = incidentsRef.current.map(i => i.id === incId ? { ...i, ...changes } : i);
@@ -890,16 +697,7 @@ export default function App() {
     }
     missionsRef.current = [...missionsRef.current, newMission];
     setMissions([...missionsRef.current]);
-    // Sync to ArcGIS Online if signed in
-    const urls = serviceUrlsRef.current;
-    if (urls?.missions) {
-      addFeature(urls.missions, makeMissionGraphic(newMission, incidentsRef.current, currentOpId))
-        .catch(err => {
-          console.warn('[App] addFeature(mission) failed:', err);
-          addSystemChat(`⚠ Synkronisering feilet for oppdrag: ${err.message}`, '#f39c12');
-        });
-    }
-  }, [currentOpId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleEditMission = useCallback((missionId, changes) => {
     const oldMission = missionsRef.current.find(m => m.id === missionId);
@@ -980,77 +778,13 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  const handleSaveOperation = useCallback(async () => {
-    const urls  = serviceUrlsRef.current;
-    const opData = buildOpData();
+  const handleSaveOperation = useCallback(() => {
+    downloadJson(buildOpData());
+  }, [currentOpId, chatHistory, currentAoCoords]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (!isSignedIn || !urls.units) {
-      // Offline: just download JSON
-      downloadJson(opData);
-      return;
-    }
-
-    // Check if operation already exists in ArcGIS Online
-    try {
-      const exists = await operationExistsInLayer(urls.operations, currentOpId);
-      if (exists) {
-        setSavePendingData(opData);
-        setSaveConfirmOpen(true);
-        return;
-      }
-    } catch (err) {
-      console.warn('[App] Could not check existing operation:', err);
-    }
-
-    await doSaveToArcGIS(opData, false);
-  }, [currentOpId, isSignedIn, chatHistory, currentAoCoords]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const doSaveToArcGIS = useCallback(async (opData, overwrite) => {
-    const urls = serviceUrlsRef.current;
-    addSystemChat('☁ Lagrer til ArcGIS Online…', '#0078d4');
-    try {
-      // If no folder/services yet, create them first
-      let activeUrls = urls;
-      if (!activeUrls.units) {
-        addSystemChat('📂 Oppretter operasjonsmappe i ArcGIS Online…', '#0078d4');
-        const { urls: newUrls } = await createOperationFolder(opData.operationName);
-        serviceUrlsRef.current = newUrls;
-        setServiceUrls(newUrls);
-        activeUrls = newUrls;
-
-        // Seed Norwegian Sword data only if this is the Norwegian Sword operation
-        if (opData.operationId === 'norwegian-sword') {
-          await seedNorwegianSword(activeUrls, opData.operationId);
-        }
-      }
-      await saveOperation(activeUrls, opData, overwrite);
-      addSystemChat('✅ Operasjon lagret til ArcGIS Online.', '#2ecc71');
-      if (saveOfflineCopy) downloadJson(opData);
-    } catch (err) {
-      console.error('[App] Save to ArcGIS failed:', err);
-      addSystemChat(`❌ Lagring feilet: ${err.message}`, '#e74c3c');
-    }
-  }, [saveOfflineCopy]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleLoadOperation = useCallback(async () => {
-    if (isSignedIn) {
-      // Show OperationPicker dialog — also fetches folder list
-      setLoadingFolders(true);
-      setLoadDialogOpen(true);
-      try {
-        const folders = await listOperationFolders();
-        setOpFolders(folders);
-      } catch (err) {
-        console.error('[App] Could not list operation folders:', err);
-        addSystemChat(`❌ Kunne ikke hente operasjonsliste: ${err.message}`, '#e74c3c');
-      } finally {
-        setLoadingFolders(false);
-      }
-    } else {
-      // Not signed in — open file picker directly
-      openLocalFilePicker();
-    }
-  }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleLoadOperation = useCallback(() => {
+    setLoadDialogOpen(true);
+  }, []);
 
   function openLocalFilePicker() {
     const fileInput = document.createElement('input');
@@ -1073,39 +807,6 @@ export default function App() {
     };
     fileInput.click();
   }
-
-  const handleSelectAndLoadOperation = useCallback(async (folderId) => {
-    setLoadDialogOpen(false);
-    addSystemChat('☁ Laster operasjon fra ArcGIS Online…', '#0078d4');
-    try {
-      const urls = await getOperationServiceUrls(folderId);
-      serviceUrlsRef.current = urls;
-      setServiceUrls(urls);
-
-      // Discover which operation ID is stored in this folder
-      const ops = urls.operations ? await listOperations(urls.operations) : [];
-      const targetOpId = ops[0]?.id || currentOpId;
-      const targetOpName = ops[0]?.name || currentOpName;
-
-      const { units, incidents, missions, ao, meta, chat } = await loadOperationFromService(urls, targetOpId);
-      setCurrentOpId(targetOpId);
-      setCurrentOpName(targetOpName);
-      applyLoadedOperation({
-        units,
-        incidents,
-        missions,
-        aoCoords: ao?.aoCoords,
-        aoLabel:  ao?.aoLabel,
-        center:   meta?.center,
-        zoom:     meta?.zoom,
-        chat,
-      }, targetOpName);
-      addSystemChat(`✅ Operasjon "${targetOpName}" lastet fra ArcGIS Online.`, '#2ecc71');
-    } catch (err) {
-      console.error('[App] Load from ArcGIS failed:', err);
-      addSystemChat(`❌ Lasting feilet: ${err.message}`, '#e74c3c');
-    }
-  }, [currentOpId, currentOpName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function applyLoadedOperation(opData, label) {
     simTimers.current.forEach(clearTimeout);
@@ -1152,9 +853,6 @@ export default function App() {
     setCurrentOpName(displayName);
     setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: `${displayName} opprettet. Legg til enheter og hendelser.` }]);
     setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
-    // Clear per-operation service URLs — new folder will be created on first save
-    serviceUrlsRef.current = {};
-    setServiceUrls({});
     setScenarioEnded(false);
     setIsPlaying(true);
     isPlayingRef.current = true;
@@ -1231,11 +929,6 @@ export default function App() {
           setTimingSettings(merged);
         }}
         timingConfig={timingSettings}
-        portalUser={portalUser}
-        isSignedIn={isSignedIn}
-        signingIn={signingIn}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
@@ -1271,20 +964,17 @@ export default function App() {
               center={mapCenter}
               zoom={mapZoom}
               basemap={basemap}
-              webmapId={selectedWebmapId}
               units={unitsVisible ? units : []}
               incidents={incidentsVisible ? incidents : []}
               missions={missionsVisible ? missions : []}
               missionPositions={missionPositions}
               aoCoords={currentAoCoords || opConfig.aoCoords}
               aoLabel={opConfig.aoLabel}
-              isSignedIn={isSignedIn}
               onViewReady={(v) => { viewRef.current = v; }}
               onCoordMove={(lat, lng, utm) => setMapCoords({ lat, lng, utm })}
               onZoomChange={setCurrentZoom}
               drawAOMode={drawAOMode}
               onMapClick={handleMapClick}
-              skolerBarnehagerVisible={skolerBarnehagerVisible}
               unitsVisible={unitsVisible}
               incidentsVisible={incidentsVisible}
               missionsVisible={missionsVisible}
@@ -1293,7 +983,6 @@ export default function App() {
               onIncidentsVisibleChange={setIncidentsVisible}
               onMissionsVisibleChange={setMissionsVisible}
               onAoVisibleChange={setAoVisible}
-              onSkolerVisibleChange={setSkolerBarnehagerVisible}
               pickingLocation={pickingLocation}
               isPlaying={isPlaying}
               onPlayPause={handlePlayPause}
@@ -1369,10 +1058,6 @@ export default function App() {
                 <input type="checkbox" checked={aoVisible} onChange={e => setAoVisible(e.target.checked)} />
                 🗺 AO-område
               </label>
-              <label className="layer-item">
-                <input type="checkbox" checked={skolerBarnehagerVisible} onChange={e => setSkolerBarnehagerVisible(e.target.checked)} />
-                🏫 Skoler og barnehager
-              </label>
             </div>
           )}
 
@@ -1406,40 +1091,38 @@ export default function App() {
             </span>
           </div>
 
-          {/* Basemap selector (offline only — when signed in, portal BasemapGallery shows in map) */}
-          {!isSignedIn && (
-            <div className="basemap-selector-wrap">
-              <button
-                className="basemap-toggle-btn"
-                onClick={e => { e.stopPropagation(); setBasemapSelectorOpen(v => !v); }}
-                title="Velg kartbakgrunn"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-                <span>
-                  {basemap === 'light' ? 'Gråtone' : basemap === 'kanvas' ? 'Kanvas' : 'Mørkt kart'}
-                </span>
-              </button>
-              {basemapSelectorOpen && (
-                <div className="basemap-dropdown" onClick={e => e.stopPropagation()}>
-                  {[
-                    { id: 'dark',   label: 'Mørkt kart' },
-                    { id: 'light',  label: 'Gråtone'    },
-                    { id: 'kanvas', label: 'Kanvas'      },
-                  ].map(opt => (
-                    <button
-                      key={opt.id}
-                      className={`basemap-option${basemap === opt.id ? ' active' : ''}`}
-                      onClick={() => { setBasemap(opt.id); setBasemapSelectorOpen(false); }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Basemap selector */}
+          <div className="basemap-selector-wrap">
+            <button
+              className="basemap-toggle-btn"
+              onClick={e => { e.stopPropagation(); setBasemapSelectorOpen(v => !v); }}
+              title="Velg kartbakgrunn"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              <span>
+                {basemap === 'light' ? 'Gråtone' : basemap === 'kanvas' ? 'Kanvas' : 'Mørkt kart'}
+              </span>
+            </button>
+            {basemapSelectorOpen && (
+              <div className="basemap-dropdown" onClick={e => e.stopPropagation()}>
+                {[
+                  { id: 'dark',   label: 'Mørkt kart' },
+                  { id: 'light',  label: 'Gråtone'    },
+                  { id: 'kanvas', label: 'Kanvas'      },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    className={`basemap-option${basemap === opt.id ? ' active' : ''}`}
+                    onClick={() => { setBasemap(opt.id); setBasemapSelectorOpen(false); }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Pick-location banner */}
           {pickingLocation && (
@@ -1561,54 +1244,10 @@ export default function App() {
         </CalciteButton>
       </CalciteDialog>
 
-      {/* Save overwrite confirmation dialog */}
-      <CalciteDialog
-        open={saveConfirmOpen || undefined}
-        heading="Operasjon finnes allerede"
-        onCalciteDialogClose={() => { setSaveConfirmOpen(false); setSavePendingData(null); }}
-      >
-        <p style={{ color: 'var(--calcite-color-text-2)', fontSize: '13px' }}>
-          Operasjonen finnes allerede i ArcGIS Online. Vil du overskrive?
-        </p>
-        <div style={{ marginTop: '12px' }}>
-          <CalciteLabel layout="inline">
-            <CalciteCheckbox
-              checked={saveOfflineCopy || undefined}
-              onCalciteCheckboxChange={e => setSaveOfflineCopy(e.target.checked)}
-            />
-            Lagre offline kopi (JSON)
-          </CalciteLabel>
-        </div>
-        <CalciteButton
-          slot="footer-end"
-          kind="danger"
-          onClick={() => {
-            setSaveConfirmOpen(false);
-            const data = savePendingData;
-            setSavePendingData(null);
-            if (data) doSaveToArcGIS(data, true);
-          }}
-        >
-          Overskriv
-        </CalciteButton>
-        <CalciteButton
-          slot="footer-start"
-          kind="neutral"
-          appearance="outline"
-          onClick={() => { setSaveConfirmOpen(false); setSavePendingData(null); }}
-        >
-          Avbryt
-        </CalciteButton>
-      </CalciteDialog>
-
       {/* Load operation — OperationPicker */}
       <OperationPicker
         open={loadDialogOpen}
         onClose={() => setLoadDialogOpen(false)}
-        isSignedIn={isSignedIn}
-        operationFolders={opFolders}
-        loadingFolders={loadingFolders}
-        onSelectFolder={handleSelectAndLoadOperation}
         onOpenLocalFile={() => { setLoadDialogOpen(false); openLocalFilePicker(); }}
       />
 
@@ -1629,23 +1268,6 @@ export default function App() {
           Avbryt
         </CalciteButton>
       </CalciteDialog>
-
-      {/* WebMap Picker (Feature 1) */}
-      <WebMapPicker
-        open={webmapPickerOpen}
-        webmaps={webmapList}
-        loading={loadingWebmaps}
-        onSelect={(id) => {
-          setSelectedWebmapId(id);
-          setWebmapPickerOpen(false);
-          addSystemChat(`🗺 Webkart valgt og lastet (ID: ${id}).`, '#2ecc71');
-        }}
-        onSkip={() => {
-          setWebmapPickerOpen(false);
-          addSystemChat('🗺 Bruker standard kartbakgrunn.', '#6b7280');
-        }}
-        onClose={() => setWebmapPickerOpen(false)}
-      />
 
       {(layerPanelOpen || basemapSelectorOpen) && (
         <div

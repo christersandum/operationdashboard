@@ -2,22 +2,6 @@
    data.js — Static configuration and shared constants
    ============================================================ */
 
-// ── ArcGIS Online portal configuration ──────────────────────
-export const PORTAL_URL      = import.meta.env.VITE_PORTAL_URL || 'https://beredskap.maps.arcgis.com';
-export const OPS_FOLDER_NAME = 'OPS';
-
-// ── Master switch: set VITE_ARCGIS_ENABLED=true to enable ArcGIS Online sync
-export const ARCGIS_ENABLED = import.meta.env.VITE_ARCGIS_ENABLED === 'true';
-
-// ── Skoler og barnehager layer ───────────────────────────────
-export const SKOLER_BARNEHAGER_URL =
-  import.meta.env.VITE_SKOLER_BARNEHAGER_URL ||
-  'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheBarnehageSkole/FeatureServer/0';
-
-// ── ArcGIS Search portal config ──────────────────────────────
-export const SEARCH_LOCATOR_ITEM_ID = import.meta.env.VITE_SEARCH_LOCATOR_ITEM_ID || '0727269857e14e088e3b10dd28663a89';
-export const SEARCH_PORTAL_URL      = PORTAL_URL;
-
 // ── Incident colors (used for unit markers when assigned) ────
 export const INCIDENT_COLORS = [
   '#e74c3c', // red
