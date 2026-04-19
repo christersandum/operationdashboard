@@ -3,7 +3,7 @@ import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
-import TileLayer from '@arcgis/core/layers/TileLayer';
+import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
@@ -14,30 +14,27 @@ import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol';
 import PopupTemplate from '@arcgis/core/PopupTemplate';
 import Search from '@arcgis/core/widgets/Search';
 import SearchSource from '@arcgis/core/widgets/Search/SearchSource';
-import BasemapGallery from '@arcgis/core/widgets/BasemapGallery';
-import Portal from '@arcgis/core/portal/Portal';
 import PortalItem from '@arcgis/core/portal/PortalItem';
 import {
   SKOLER_BARNEHAGER_URL,
   SEARCH_LOCATOR_ITEM_ID,
   SEARCH_PORTAL_URL,
-  PORTAL_URL,
 } from '../data';
 import { wgs84ToUTM33N, utm33NToWGS84 } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Geodata ArcGIS basemaps (UTM33/EUREF89)
+// Geodata ArcGIS basemaps (UTM33/EUREF89) — VectorTileServer
 const BASEMAP_TILE_URLS = {
-  dark:   'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheGraatone/MapServer',
-  light:  'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheKart/MapServer',
-  kanvas: 'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheTerreng/MapServer',
+  dark:   'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone/VectorTileServer',
+  light:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheBasis/VectorTileServer',
+  kanvas: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheFinlandKanvasMork/VectorTileServer',
 };
 
 // ── Helper: build a Basemap instance ────────────────────────
 function buildBasemap(basemapId) {
   const url = BASEMAP_TILE_URLS[basemapId] ?? BASEMAP_TILE_URLS.dark;
   return new Basemap({
-    baseLayers: [new TileLayer({ url, copyright: '© Geodata AS / Kartverket' })],
+    baseLayers: [new VectorTileLayer({ url })],
   });
 }
 
@@ -77,7 +74,6 @@ export default function ArcGISMap({
   const onMapClickRef = useRef(onMapClick);
   const mapRef      = useRef(null);
   const basemapRef  = useRef(basemap);
-  const basemapGalleryRef = useRef(null);
   const isSignedInRef = useRef(isSignedIn);
 
   // Feature 8: two dropdown states
@@ -306,37 +302,13 @@ export default function ArcGISMap({
     }
   }, [pickingLocation]);
 
-  // ── Basemap switch (CartoDB tiles — portal BasemapGallery handles online) ─
+  // ── Basemap switch ────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current) return;
     if (basemap === basemapRef.current) return;
-    // Only switch using CartoDB basemap when not signed in
-    if (!basemapGalleryRef.current) {
-      mapRef.current.basemap = buildBasemap(basemap);
-    }
+    mapRef.current.basemap = buildBasemap(basemap);
     basemapRef.current = basemap;
   }, [basemap]);
-
-  // ── Add BasemapGallery when user signs in ─────────────────
-  useEffect(() => {
-    if (!viewRef.current) return;
-    if (isSignedIn && !basemapGalleryRef.current) {
-      // Use the portal's configured basemap group
-      const portal = new Portal({ url: PORTAL_URL });
-      const gallery = new BasemapGallery({
-        view: viewRef.current,
-        source: { portal },
-      });
-      viewRef.current.ui.add(gallery, 'bottom-right');
-      basemapGalleryRef.current = gallery;
-    } else if (!isSignedIn && basemapGalleryRef.current) {
-      viewRef.current.ui.remove(basemapGalleryRef.current);
-      basemapGalleryRef.current.destroy();
-      basemapGalleryRef.current = null;
-      // Restore CartoDB basemap
-      if (mapRef.current) mapRef.current.basemap = buildBasemap(basemapRef.current);
-    }
-  }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fly to new center/zoom ─────────────────────────────────
   useEffect(() => {
