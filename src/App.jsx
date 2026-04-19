@@ -46,6 +46,51 @@ function findClosestFreeUnits(incident, units, count) {
     .map(x => x.unit);
 }
 
+// Approximate meters per degree of latitude at the equator (Earth's circumference / 360°).
+// Used to convert between metres and decimal degrees for unit placement offsets.
+const METERS_PER_DEG_LAT = 111000;
+
+// ── Calculate a spawn position ~45 s of travel time from the task ──
+// Assumes ~10 m/s travel speed, so 45 s ≈ 450 m.  A random direction is
+// chosen; longitude offset is corrected for Norway's latitude (~60°).
+function calcStartPositionAwayFromTask(taskLat, taskLng) {
+  const metersOffset = 450 + Math.random() * 350; // 450–800 m for visual variety
+  const DEG_PER_METER_LAT = 1 / METERS_PER_DEG_LAT;
+  const DEG_PER_METER_LNG = 1 / (METERS_PER_DEG_LAT * Math.cos(taskLat * Math.PI / 180));
+  const angle = Math.random() * 2 * Math.PI;
+  return {
+    lat: taskLat + metersOffset * DEG_PER_METER_LAT * Math.sin(angle),
+    lng: taskLng + metersOffset * DEG_PER_METER_LNG * Math.cos(angle),
+  };
+}
+
+// ── Generate a jagged path between two points ───────────────────
+// Returns an array of { lat, lng } waypoints (including start + end).
+// Intermediate points are offset perpendicular to the direct line so
+// the unit appears to travel in a realistic, non-straight route.
+function generateJaggedPath(startLat, startLng, endLat, endLng, numMidpoints = 4) {
+  const points = [{ lat: startLat, lng: startLng }];
+  const dx = endLng - startLng;
+  const dy = endLat - startLat;
+  // Small epsilon prevents division-by-zero when start === end (degenerate path).
+  const len = Math.sqrt(dx * dx + dy * dy) || 1e-9;
+  // Perpendicular unit vector (rotated 90°)
+  const perpLat = -dx / len;
+  const perpLng =  dy / len;
+  // Max lateral offset ≈ 20% of total path length for organic movement
+  const maxOffset = len * 0.20;
+  for (let i = 1; i <= numMidpoints; i++) {
+    const t = i / (numMidpoints + 1);
+    const offset = (Math.random() - 0.5) * 2 * maxOffset;
+    points.push({
+      lat: startLat + dy * t + perpLat * offset,
+      lng: startLng + dx * t + perpLng * offset,
+    });
+  }
+  points.push({ lat: endLat, lng: endLng });
+  return points;
+}
+
 export default function App() {
   const [currentOpId,    setCurrentOpId]    = useState('norwegian-sword');
   const [units,          setUnits]          = useState([]);
@@ -295,12 +340,18 @@ export default function App() {
           if (u.status === 'offline') return u;
           const mission = missionList.find(m => m.assignedUnitIds.includes(u.id));
           const mPos = mission ? (missionPositionsRef.current[mission.id] || { lat: incData.lat, lng: incData.lng }) : { lat: incData.lat, lng: incData.lng };
+          // Spawn the unit ~45 s of travel time away from its task, then build
+          // a jagged path so it doesn't move in a straight line.
+          const spawnPos = calcStartPositionAwayFromTask(mPos.lat, mPos.lng);
+          const waypoints = generateJaggedPath(spawnPos.lat, spawnPos.lng, mPos.lat, mPos.lng);
           unitPlaybackRef.current[u.id] = {
-            startLat: u.lat, startLng: u.lng,
+            startLat: spawnPos.lat, startLng: spawnPos.lng,
             startTime: incData.timestamp,
             endLat: mPos.lat, endLng: mPos.lng,
+            waypoints, // jagged intermediate waypoints
           };
-          return { ...u, target: mPos, moving: true, assignedIncident: incData.id, incidentColorIndex: incData.colorIndex, status: 'opptatt' };
+          // Place the unit at its spawn position immediately
+          return { ...u, lat: spawnPos.lat, lng: spawnPos.lng, target: mPos, moving: true, assignedIncident: incData.id, incidentColorIndex: incData.colorIndex, status: 'opptatt' };
         });
       } else {
         const toAssign = findClosestFreeUnits(inc, unitsRef.current, 2);
@@ -311,12 +362,18 @@ export default function App() {
             const missionForUnit = incMissions[assignIdx % Math.max(1, incMissions.length)];
             assignIdx++;
             const mPos = missionForUnit ? (missionPositionsRef.current[missionForUnit.id] || { lat: incData.lat, lng: incData.lng }) : { lat: incData.lat, lng: incData.lng };
+            // Spawn the unit ~45 s of travel time away from its task, then build
+            // a jagged path so it doesn't move in a straight line.
+            const spawnPos = calcStartPositionAwayFromTask(mPos.lat, mPos.lng);
+            const waypoints = generateJaggedPath(spawnPos.lat, spawnPos.lng, mPos.lat, mPos.lng);
             unitPlaybackRef.current[u.id] = {
-              startLat: u.lat, startLng: u.lng,
+              startLat: spawnPos.lat, startLng: spawnPos.lng,
               startTime: incData.timestamp,
               endLat: mPos.lat, endLng: mPos.lng,
+              waypoints, // jagged intermediate waypoints
             };
-            return { ...u, target: mPos, moving: true, assignedIncident: incData.id, incidentColorIndex: incData.colorIndex, status: 'opptatt' };
+            // Place the unit at its spawn position immediately
+            return { ...u, lat: spawnPos.lat, lng: spawnPos.lng, target: mPos, moving: true, assignedIncident: incData.id, incidentColorIndex: incData.colorIndex, status: 'opptatt' };
           }
           return u;
         });
@@ -365,8 +422,22 @@ export default function App() {
       if (!pb) return u;
       const elapsed = Math.max(0, sliderTime - pb.startTime);
       const t = TRAVEL_TIME_SECONDS > 0 ? Math.min(1, elapsed / TRAVEL_TIME_SECONDS) : 1;
-      const lat = pb.startLat + (pb.endLat - pb.startLat) * t;
-      const lng = pb.startLng + (pb.endLng - pb.startLng) * t;
+
+      // Interpolate along jagged waypoints when available; fall back to straight line.
+      let lat, lng;
+      if (pb.waypoints && pb.waypoints.length >= 2) {
+        const wps = pb.waypoints;
+        const totalSegments = wps.length - 1;
+        const segmentT = t * totalSegments;
+        const segIndex = Math.min(Math.floor(segmentT), totalSegments - 1);
+        const segFrac = segmentT - segIndex;
+        lat = wps[segIndex].lat + (wps[segIndex + 1].lat - wps[segIndex].lat) * segFrac;
+        lng = wps[segIndex].lng + (wps[segIndex + 1].lng - wps[segIndex].lng) * segFrac;
+      } else {
+        lat = pb.startLat + (pb.endLat - pb.startLat) * t;
+        lng = pb.startLng + (pb.endLng - pb.startLng) * t;
+      }
+
       if (t >= 1 && !arrivedRef.current.has(u.id)) {
         arrivedRef.current.add(u.id);
         checkMissionCompletion(u.id);
