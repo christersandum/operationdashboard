@@ -364,14 +364,16 @@ export default function App() {
       const pb = unitPlaybackRef.current[u.id];
       if (!pb) return u;
       const elapsed = Math.max(0, sliderTime - pb.startTime);
-      const t = Math.min(1, elapsed / TRAVEL_TIME_SECONDS);
+      const t = TRAVEL_TIME_SECONDS > 0 ? Math.min(1, elapsed / TRAVEL_TIME_SECONDS) : 1;
       const lat = pb.startLat + (pb.endLat - pb.startLat) * t;
       const lng = pb.startLng + (pb.endLng - pb.startLng) * t;
       if (t >= 1 && !arrivedRef.current.has(u.id)) {
         arrivedRef.current.add(u.id);
         checkMissionCompletion(u.id);
       }
-      positionChanged = true;
+      if (lat !== u.lat || lng !== u.lng || (t < 1) !== u.moving) {
+        positionChanged = true;
+      }
       return { ...u, lat, lng, moving: t < 1 };
     });
     if (positionChanged) {
