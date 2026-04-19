@@ -22,10 +22,8 @@ const ArcGISMap = lazy(() => import('./components/ArcGISMap'));
 // Singleton local provider for offline/local persistence
 const localProvider = createLocalProvider();
 
-const UNIT_MOVE_SPEED  = 0.004;
-const UNIT_RANDOM_STEP = 0.003;
-const ARRIVE_DIST = 0.003;
 const RIGHT_PANEL_TOGGLE_WIDTH = 28; // px — must match .right-panel-toggle width in CSS
+const TRAVEL_TIME_SECONDS = 45; // seconds in slider time for a unit to reach its task
 
 function nowTime() {
   const now = new Date();
@@ -66,7 +64,6 @@ export default function App() {
   const [broadcastOpen,  setBroadcastOpen]  = useState(false);
   const [broadcastText,  setBroadcastText]  = useState('');
   const [activeTab,      setActiveTab]      = useState('overview');
-  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [unitsVisible,   setUnitsVisible]   = useState(true);
   const [incidentsVisible, setIncidentsVisible] = useState(true);
   const [missionsVisible, setMissionsVisible] = useState(true);
@@ -114,6 +111,7 @@ export default function App() {
   const chatIdRef    = useRef(100);
   const activeTabRef = useRef('overview');
   const arrivedRef   = useRef(new Set());
+  const unitPlaybackRef = useRef({}); // { [unitId]: { startLat, startLng, startTime, endLat, endLng } }
 
   const opConfig = SEED_CONFIG;
 
@@ -242,9 +240,7 @@ export default function App() {
     const startTime = Date.now() - (SEED_CONFIG.elapsed || 0);
     setMissionStartTime(startTime);
 
-    moveInterval.current = setInterval(() => {
-      tickMovement();
-    }, 3000);
+    unitPlaybackRef.current = {};
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Seed initial incidents/missions/chat based on sliderTime ─
@@ -299,6 +295,11 @@ export default function App() {
           if (u.status === 'offline') return u;
           const mission = missionList.find(m => m.assignedUnitIds.includes(u.id));
           const mPos = mission ? (missionPositionsRef.current[mission.id] || { lat: incData.lat, lng: incData.lng }) : { lat: incData.lat, lng: incData.lng };
+          unitPlaybackRef.current[u.id] = {
+            startLat: u.lat, startLng: u.lng,
+            startTime: incData.timestamp,
+            endLat: mPos.lat, endLng: mPos.lng,
+          };
           return { ...u, target: mPos, moving: true, assignedIncident: incData.id, incidentColorIndex: incData.colorIndex, status: 'opptatt' };
         });
       } else {
@@ -310,6 +311,11 @@ export default function App() {
             const missionForUnit = incMissions[assignIdx % Math.max(1, incMissions.length)];
             assignIdx++;
             const mPos = missionForUnit ? (missionPositionsRef.current[missionForUnit.id] || { lat: incData.lat, lng: incData.lng }) : { lat: incData.lat, lng: incData.lng };
+            unitPlaybackRef.current[u.id] = {
+              startLat: u.lat, startLng: u.lng,
+              startTime: incData.timestamp,
+              endLat: mPos.lat, endLng: mPos.lng,
+            };
             return { ...u, target: mPos, moving: true, assignedIncident: incData.id, incidentColorIndex: incData.colorIndex, status: 'opptatt' };
           }
           return u;
@@ -352,48 +358,30 @@ export default function App() {
       });
     });
 
-  }, [sliderTime]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function tickMovement() {
-    let changed = false;
-    const updated = unitsRef.current.map(unit => {
-      if (unit.status === 'offline') return unit;
-      if (unit.target) {
-        const dLat = unit.target.lat - unit.lat;
-        const dLng = unit.target.lng - unit.lng;
-        const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-        if (dist > ARRIVE_DIST) {
-          changed = true;
-          return {
-            ...unit,
-            lat: unit.lat + (dLat / dist) * UNIT_MOVE_SPEED,
-            lng: unit.lng + (dLng / dist) * UNIT_MOVE_SPEED,
-            moving: true,
-          };
-        } else {
-          if (!arrivedRef.current.has(unit.id)) {
-            arrivedRef.current.add(unit.id);
-            checkMissionCompletion(unit.id);
-          }
-          changed = true;
-          return { ...unit, moving: false, target: null };
-        }
-      } else if (unit.moving) {
-        changed = true;
-        return {
-          ...unit,
-          lat: unit.lat + (Math.random() - 0.5) * UNIT_RANDOM_STEP,
-          lng: unit.lng + (Math.random() - 0.5) * UNIT_RANDOM_STEP,
-        };
+    // Compute slider-driven unit positions
+    let positionChanged = false;
+    const positioned = unitsRef.current.map(u => {
+      const pb = unitPlaybackRef.current[u.id];
+      if (!pb) return u;
+      const elapsed = Math.max(0, sliderTime - pb.startTime);
+      const t = TRAVEL_TIME_SECONDS > 0 ? Math.min(1, elapsed / TRAVEL_TIME_SECONDS) : 1;
+      const lat = pb.startLat + (pb.endLat - pb.startLat) * t;
+      const lng = pb.startLng + (pb.endLng - pb.startLng) * t;
+      if (t >= 1 && !arrivedRef.current.has(u.id)) {
+        arrivedRef.current.add(u.id);
+        checkMissionCompletion(u.id);
       }
-      return unit;
+      if (lat !== u.lat || lng !== u.lng || (t < 1) !== u.moving) {
+        positionChanged = true;
+      }
+      return { ...u, lat, lng, moving: t < 1 };
     });
-
-    if (changed) {
-      unitsRef.current = updated;
-      setUnits([...updated]);
+    if (positionChanged) {
+      unitsRef.current = positioned;
+      setUnits([...positioned]);
     }
-  }
+
+  }, [sliderTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function checkMissionCompletion(arrivedUnitId) {
     let anyUpdated = false;
@@ -699,7 +687,8 @@ export default function App() {
     if (opData.center) { setMapCenter(opData.center); setMapZoom(opData.zoom || 12); }
     if (opData.aoCoords) setCurrentAoCoords(opData.aoCoords);
     setScenarioEnded(false);
-    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+    unitPlaybackRef.current = {};
+    arrivedRef.current = new Set();
     addSystemChat(`📂 Operasjon lastet: ${label}`, '#2ecc71');
   }
 
@@ -719,7 +708,7 @@ export default function App() {
     setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#6b7280', system: true, self: false, time: nowTime(), text: `${displayName} opprettet. Legg til enheter og hendelser.` }]);
     setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
     setScenarioEnded(false);
-    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+    unitPlaybackRef.current = {};
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMapClick = useCallback((lat, lng, utm) => {
@@ -762,7 +751,7 @@ export default function App() {
     setChatHistory([{ id: 1, sender: 'System', initials: '⚙', color: '#e74c3c', system: true, self: false, time: nowTime(), text: '🗑 Operasjon slettet/nullstilt. All data er fjernet.' }]);
     setStats({ units: 0, incidents: 0, tasks: 0, alerts: 0 });
     setScenarioEnded(false);
-    moveInterval.current = setInterval(() => { tickMovement(); }, 3000);
+    unitPlaybackRef.current = {};
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -838,78 +827,6 @@ export default function App() {
 
           {/* Time slider — across the bottom of the map */}
           <TimeSlider onTimeChange={setSliderTime} />
-
-          {/* Toolbar */}
-          <div className="map-toolbar">
-            <button
-              className={`map-toolbar-btn${unitsVisible ? ' active' : ''}`}
-              onClick={() => setUnitsVisible(v => !v)}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-              </svg>
-              Enheter
-            </button>
-
-            <button
-              className={`map-toolbar-btn${incidentsVisible ? ' active' : ''}`}
-              onClick={() => setIncidentsVisible(v => !v)}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              </svg>
-              Hendelser
-            </button>
-
-            <button
-              className={`map-toolbar-btn${layerPanelOpen ? ' active' : ''}`}
-              onClick={e => { e.stopPropagation(); setLayerPanelOpen(v => !v); }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                <polyline points="2 17 12 22 22 17"/>
-                <polyline points="2 12 12 17 22 12"/>
-              </svg>
-              Kartlag
-            </button>
-
-            {drawAOMode && (
-              <button
-                className="map-toolbar-btn active"
-                onClick={() => { setDrawAOMode(false); setAoFirstPoint(null); }}
-                title="Avbryt AO-tegning"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="0"/>
-                </svg>
-                {aoFirstPoint ? 'Klikk 2. hjørne' : 'Klikk 1. hjørne'}
-              </button>
-            )}
-          </div>
-
-          {/* Layer panel */}
-          {layerPanelOpen && (
-            <div className="layer-panel visible" onClick={e => e.stopPropagation()}>
-              <div className="layer-panel-title">Kartlag</div>
-              <label className="layer-item">
-                <input type="checkbox" checked={unitsVisible} onChange={e => setUnitsVisible(e.target.checked)} />
-                Enhetsposisjoner
-              </label>
-              <label className="layer-item">
-                <input type="checkbox" checked={incidentsVisible} onChange={e => setIncidentsVisible(e.target.checked)} />
-                Hendelsesmarkører
-              </label>
-              <label className="layer-item">
-                <input type="checkbox" checked={missionsVisible} onChange={e => setMissionsVisible(e.target.checked)} />
-                Oppdrag
-              </label>
-              <label className="layer-item">
-                <input type="checkbox" checked={aoVisible} onChange={e => setAoVisible(e.target.checked)} />
-                🗺 AO-område
-              </label>
-            </div>
-          )}
 
           {/* Info bar */}
           <div className="map-info-bar">
@@ -1068,13 +985,6 @@ export default function App() {
           Avbryt
         </CalciteButton>
       </CalciteDialog>
-
-      {layerPanelOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 5 }}
-          onClick={() => setLayerPanelOpen(false)}
-        />
-      )}
     </CalciteShell>
   );
 }
