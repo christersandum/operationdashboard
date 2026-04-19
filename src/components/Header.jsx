@@ -2,16 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   CalciteNavigation,
   CalciteNavigationLogo,
-  CalciteNavigationUser,
   CalciteChip,
   CalciteButton,
   CalciteIcon,
   CalciteDropdown,
   CalciteDropdownGroup,
   CalciteDropdownItem,
-  CalciteLabel,
-  CalciteInput,
-  CalciteDialog,
 } from '@esri/calcite-components-react';
 import './Header.css';
 
@@ -35,24 +31,11 @@ export default function Header({
   onDeleteOperation,
   onDrawAO,
   drawAOMode,
-  onSettingsChange,
-  timingConfig,
-  portalUser,
-  isSignedIn,
-  signingIn,
-  onLogin,
-  onLogout,
 }) {
   const pad = n => String(n).padStart(2, '0');
   const [time, setTime]     = useState('--:--:--');
   const [date, setDate]     = useState('');
   const [timezone, setTimezone] = useState('UTC');
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
-  const defaultSettings = {
-    warningInterval: 30, incidentInterval: 30, unitTravelTime: 35, taskInterval: 20, chatInterval: 15,
-  };
-  const [settings, setSettings] = useState({ ...defaultSettings, ...(timingConfig || {}) });
 
   useEffect(() => {
     const tick = () => {
@@ -80,11 +63,6 @@ export default function Header({
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [timezone]);
-
-  const applySettings = () => {
-    if (onSettingsChange) onSettingsChange(settings);
-    setSettingsOpen(false);
-  };
 
   return (
     <CalciteNavigation slot="header">
@@ -183,90 +161,7 @@ export default function Header({
             </CalciteDropdownGroup>
           )}
         </CalciteDropdown>
-
-        {/* Settings */}
-        <CalciteButton
-          kind="neutral"
-          appearance="transparent"
-          scale="s"
-          iconStart="gear"
-          onClick={() => setSettingsOpen(true)}
-        >
-          Innstillinger
-        </CalciteButton>
-        <CalciteDialog
-          open={settingsOpen || undefined}
-          heading="⚙ Innstillinger"
-          scale="s"
-          onCalciteDialogClose={() => setSettingsOpen(false)}
-        >
-          {[
-            { key: 'warningInterval',  label: 'Tid mellom varsler (sek)'         },
-            { key: 'incidentInterval', label: 'Tid mellom hendelser (sek)'        },
-            { key: 'unitTravelTime',   label: 'Reisetid for enheter (sek)'        },
-            { key: 'taskInterval',     label: 'Tid mellom oppdrag (sek)'          },
-            { key: 'chatInterval',     label: 'Tid mellom chat-meldinger (sek)'   },
-          ].map(({ key, label }) => (
-            <div key={key} style={{ marginBottom: '8px' }}>
-              <CalciteLabel scale="s">
-                {label}
-                <CalciteInput
-                  type="number"
-                  scale="s"
-                  value={String(settings[key] ?? defaultSettings[key])}
-                  min="1"
-                  onCalciteInputInput={e => setSettings(s => ({ ...s, [key]: Number(e.target.value) }))}
-                />
-              </CalciteLabel>
-            </div>
-          ))}
-          <CalciteButton
-            slot="footer-end"
-            width="full"
-            onClick={applySettings}
-            scale="s"
-            kind="brand"
-          >
-            Bruk innstillinger
-          </CalciteButton>
-          <CalciteButton
-            slot="footer-start"
-            kind="neutral"
-            appearance="outline"
-            scale="s"
-            onClick={() => setSettingsOpen(false)}
-          >
-            Avbryt
-          </CalciteButton>
-        </CalciteDialog>
       </div>
-
-      {isSignedIn ? (
-        <CalciteDropdown slot="user" placement="bottom-end" scale="s">
-          <CalciteNavigationUser
-            slot="trigger"
-            fullName={portalUser?.fullName || 'Admin Bruker'}
-            username={portalUser?.username || 'Operasjonskoordinator'}
-            thumbnail="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%230078d4'/%3E%3Ctext x='16' y='21' text-anchor='middle' fill='white' font-size='14' font-weight='bold'%3EAU%3C/text%3E%3C/svg%3E"
-          />
-          <CalciteDropdownGroup>
-            <CalciteDropdownItem iconStart="sign-out" onCalciteDropdownItemSelect={() => onLogout && onLogout()}>
-              Logg ut
-            </CalciteDropdownItem>
-          </CalciteDropdownGroup>
-        </CalciteDropdown>
-      ) : (
-        <CalciteButton
-          slot="user"
-          kind="brand"
-          scale="s"
-          iconStart="sign-in"
-          loading={signingIn || undefined}
-          onClick={() => onLogin && onLogin()}
-        >
-          {signingIn ? 'Logger inn…' : 'Logg inn'}
-        </CalciteButton>
-      )}
     </CalciteNavigation>
   );
 }
