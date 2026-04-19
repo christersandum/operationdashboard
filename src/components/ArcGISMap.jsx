@@ -66,7 +66,7 @@ export default function ArcGISMap({
   const zoomRef                    = useRef(zoom);
   const basemapInitRef             = useRef(basemap);
 
-  // Feature 8: dropdown state
+  // Operational data visibility dropdown state
   const [opsdataOpen, setOpsdataOpen] = useState(false);
   // Internal visibility state (synced from props)
   const [localUnitsVisible, setLocalUnitsVisible] = useState(unitsVisible !== false);
