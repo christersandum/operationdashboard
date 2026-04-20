@@ -2,7 +2,10 @@ import React, { useRef, useEffect, useState } from 'react';
 import Map from '@arcgis/core/Map';
 import MapView from '@arcgis/core/views/MapView';
 import Basemap from '@arcgis/core/Basemap';
-import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
+// WebTileLayer is used for raster XYZ tiles (CartoCDN/OSM) which work without
+// authentication, replacing the previous VectorTileLayer + Geodata Online URLs
+// that required Norwegian-government access and were causing basemap failures.
+import WebTileLayer from '@arcgis/core/layers/WebTileLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
@@ -14,18 +17,36 @@ import Search from '@arcgis/core/widgets/Search';
 import { wgs84ToUTM33N } from '../utils/coordUtils';
 import './ArcGISMap.css';
 
-// Geodata Online VectorTile basemaps — Web Mercator endpoints
-const BASEMAP_TILE_URLS = {
-  dark:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheKanvasMork_WM/VectorTileServer',
-  grey:  'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheGraatone_WM/VectorTileServer',
-  basis: 'https://services.geodataonline.no/arcgis/rest/services/GeocacheVector/GeocacheBasis_WM/VectorTileServer',
+// Public raster tile basemaps — no API key required.
+// Switched from Geodata Online VectorTileServer (required Norwegian-gov auth)
+// to CartoCDN (dark/grey) and OpenStreetMap (basis), which are freely accessible.
+const BASEMAP_TILE_CONFIGS = {
+  dark: {
+    urlTemplate: 'https://{subDomain}.basemaps.cartocdn.com/dark_all/{level}/{col}/{row}.png',
+    subDomains: ['a', 'b', 'c', 'd'],
+    copyright: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  grey: {
+    urlTemplate: 'https://{subDomain}.basemaps.cartocdn.com/light_all/{level}/{col}/{row}.png',
+    subDomains: ['a', 'b', 'c', 'd'],
+    copyright: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  basis: {
+    urlTemplate: 'https://{subDomain}.tile.openstreetmap.org/{level}/{col}/{row}.png',
+    subDomains: ['a', 'b', 'c'],
+    copyright: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
 };
 
-// ── Helper: build a Basemap instance ────────────────────────
+// ── Helper: build a Basemap instance using a public WebTileLayer ─
 function buildBasemap(basemapId) {
-  const url = BASEMAP_TILE_URLS[basemapId] ?? BASEMAP_TILE_URLS.dark;
+  const cfg = BASEMAP_TILE_CONFIGS[basemapId] ?? BASEMAP_TILE_CONFIGS.dark;
   return new Basemap({
-    baseLayers: [new VectorTileLayer({ url })],
+    baseLayers: [new WebTileLayer({
+      urlTemplate: cfg.urlTemplate,
+      subDomains: cfg.subDomains,
+      copyright: cfg.copyright,
+    })],
   });
 }
 
@@ -110,13 +131,17 @@ export default function ArcGISMap({
     });
     mapRef.current = map;
 
-    // ── MapView — WGS84 ─────────────────────────────────────
+    // ── MapView — let the basemap drive the spatial reference ──
+    // Previously forced to WGS84 (4326), but WebTileLayer (OSM/CartoCDN)
+    // only serves Web Mercator (3857) tiles.  Removing the override lets
+    // the view adopt Web Mercator from the basemap so tiles load correctly.
+    // All Point/Polygon geometries still carry their own wkid=4326 SR and
+    // are reprojected automatically by the SDK.
     const view = new MapView({
       container: mapDivRef.current,
       map: map,
       center: centerRef.current,
       zoom: zoomRef.current,
-      spatialReference: { wkid: 4326 },
       ui: { components: ['zoom'] },
       popup: { dockEnabled: true, dockOptions: { position: 'top-right', breakpoint: false } },
     });

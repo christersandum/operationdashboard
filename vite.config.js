@@ -7,13 +7,20 @@ const calciteAssets = {
   dest: '.',
 };
 
+// Copy @arcgis/core assets (i18n locale strings, fonts, etc.) to avoid
+// falling back to the Esri CDN (js.arcgis.com) during dev and production.
+const arcgisAssets = {
+  src: 'node_modules/@arcgis/core/assets',
+  dest: 'assets/arcgis',
+};
+
 export default defineConfig({
   base: '/operationdashboard/',
   plugins: [
     react(),
     // Copy Calcite component assets (icons + i18n strings) so they are served
     // locally instead of fetched from the Esri CDN (both dev and build).
-    viteStaticCopy({ targets: [calciteAssets] }),
+    viteStaticCopy({ targets: [calciteAssets, arcgisAssets] }),
   ],
   build: {
     target: 'es2020',
